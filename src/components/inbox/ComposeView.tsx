@@ -1,0 +1,417 @@
+'use client'
+
+import { useState, useTransition, useRef, KeyboardEvent, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  AtSign, X, Loader2, Plus, FileText, CheckSquare,
+  CalendarCheck, ClipboardList, Eye, Code2
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { createClient } from '@/lib/supabase/client'
+import { sendMessage } from '@/app/(app)/actions'
+import RichEditor from './RichEditor'
+import type { MessageContentType } from '@/types'
+
+// ── Types ─────────────────────────────────────────────────────
+interface RecipientProfile {
+  id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+}
+
+// ── Message type config ───────────────────────────────────────
+const MSG_TYPES: { value: MessageContentType; label: string; icon: React.ElementType }[] = [
+  { value: 'text', label: 'Message', icon: FileText },
+  { value: 'approval', label: 'Approval', icon: CheckSquare },
+  { value: 'rsvp', label: 'RSVP', icon: CalendarCheck },
+  { value: 'survey', label: 'Survey', icon: ClipboardList },
+]
+
+// ── Recipient tag with avatar ─────────────────────────────────
+function RecipientTag({ profile, onRemove }: { profile: RecipientProfile; onRemove: () => void }) {
+  const initials = profile.display_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+  return (
+    <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium"
+      style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}>
+      <Avatar className="w-4 h-4">
+        {profile.avatar_url
+          ? <img src={profile.avatar_url} alt={profile.display_name} className="w-4 h-4 rounded-full object-cover" />
+          : <AvatarFallback className="text-[8px]" style={{ backgroundColor: 'var(--color-hostl-200)', color: 'var(--color-hostl-700)' }}>
+              {initials}
+            </AvatarFallback>
+        }
+      </Avatar>
+      @{profile.handle}
+      <button type="button" onClick={onRemove} className="hover:opacity-70 ml-0.5">
+        <X size={10} />
+      </button>
+    </span>
+  )
+}
+
+// ── Handle input with live lookup ─────────────────────────────
+function RecipientInput({
+  label, recipients, onAdd, onRemove, maxRecipients = 4,
+}: {
+  label: string
+  recipients: RecipientProfile[]
+  onAdd: (p: RecipientProfile) => void
+  onRemove: (id: string) => void
+  maxRecipients?: number
+}) {
+  const [input, setInput] = useState('')
+  const [suggestion, setSuggestion] = useState<RecipientProfile | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'found' | 'notfound'>('idle')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const val = input.replace('@', '').trim().toLowerCase()
+    if (!val) { setSuggestion(null); setStatus('idle'); return }
+
+    setStatus('loading')
+    debounceRef.current = setTimeout(async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, handle, display_name, avatar_url')
+        .eq('handle', val)
+        .maybeSingle()
+
+      if (data) { setSuggestion(data); setStatus('found') }
+      else { setSuggestion(null); setStatus('notfound') }
+    }, 400)
+  }, [input])
+
+  function commit() {
+    if (suggestion && !recipients.find((r) => r.id === suggestion.id)) {
+      if (recipients.length < maxRecipients) {
+        onAdd(suggestion)
+        setInput('')
+        setSuggestion(null)
+        setStatus('idle')
+      }
+    }
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit() }
+    if (e.key === 'Backspace' && !input && recipients.length > 0) {
+      onRemove(recipients[recipients.length - 1].id)
+    }
+  }
+
+  const alreadyAdded = suggestion ? recipients.some((r) => r.id === suggestion.id) : false
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div
+        className="flex flex-wrap items-center gap-1.5 min-h-[42px] px-3 py-2 rounded-lg border cursor-text"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+        onClick={() => inputRef.current?.focus()}
+      >
+        {recipients.map((r) => (
+          <RecipientTag key={r.id} profile={r} onRemove={() => onRemove(r.id)} />
+        ))}
+        {recipients.length < maxRecipients && (
+          <div className="flex items-center gap-1 flex-1 min-w-[140px]">
+            <AtSign size={13} style={{ color: 'var(--color-muted-foreground)' }} />
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value.replace(/[^a-zA-Z0-9_@-]/g, ''))}
+              onKeyDown={onKeyDown}
+              placeholder={recipients.length === 0 ? 'handle' : ''}
+              className="flex-1 bg-transparent text-sm outline-none"
+              style={{ color: 'var(--color-foreground)' }}
+              autoComplete="off"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Live suggestion */}
+      {input.length > 1 && (
+        <div className="rounded-lg border overflow-hidden"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-raised)' }}>
+          {status === 'loading' && (
+            <div className="flex items-center gap-2 px-3 py-2.5 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+              <Loader2 size={12} className="animate-spin" /> Looking up @{input.replace('@', '')}…
+            </div>
+          )}
+          {status === 'found' && suggestion && (
+            <button
+              type="button"
+              onClick={commit}
+              disabled={alreadyAdded}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
+              style={{ opacity: alreadyAdded ? 0.5 : 1 }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-accent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <Avatar className="w-7 h-7 shrink-0">
+                {suggestion.avatar_url
+                  ? <img src={suggestion.avatar_url} alt={suggestion.display_name} className="w-7 h-7 rounded-full object-cover" />
+                  : <AvatarFallback className="text-xs" style={{ backgroundColor: 'var(--color-hostl-100)', color: 'var(--color-hostl-700)' }}>
+                      {suggestion.display_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                    </AvatarFallback>
+                }
+              </Avatar>
+              <div>
+                <div className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>{suggestion.display_name}</div>
+                <div className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>@{suggestion.handle}</div>
+              </div>
+              {alreadyAdded && <span className="ml-auto text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Already added</span>}
+            </button>
+          )}
+          {status === 'notfound' && (
+            <div className="px-3 py-2.5 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+              No account found for @{input.replace('@', '')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {recipients.length >= maxRecipients && (
+        <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+          Maximum {maxRecipients} recipients
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Main compose ──────────────────────────────────────────────
+export default function ComposeView() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Pre-fill from reply/forward URL params
+  const prefillTo = searchParams.get('to') ?? ''
+  const prefillSubject = searchParams.get('subject') ?? ''
+
+  const [toRecipients, setToRecipients] = useState<RecipientProfile[]>([])
+  const [ccRecipients, setCcRecipients] = useState<RecipientProfile[]>([])
+  const [showCc, setShowCc] = useState(false)
+  const [subject, setSubject] = useState(prefillSubject)
+  const [contentType, setContentType] = useState<MessageContentType>('text')
+  const [bodyMode, setBodyMode] = useState<'rich' | 'html'>('rich')
+  const [richBody, setRichBody] = useState('')
+  const [htmlBody, setHtmlBody] = useState('')
+  const [showHtmlPreview, setShowHtmlPreview] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  // Auto-add reply-to recipient
+  useEffect(() => {
+    if (!prefillTo) return
+    const supabase = createClient()
+    supabase
+      .from('profiles')
+      .select('id, handle, display_name, avatar_url')
+      .eq('handle', prefillTo)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setToRecipients([data])
+      })
+  }, [prefillTo])
+
+  const totalRecipients = toRecipients.length + ccRecipients.length
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+
+    if (toRecipients.length === 0) { setError('Add at least one recipient.'); return }
+    if (!subject.trim()) { setError('Subject is required.'); return }
+
+    const body = bodyMode === 'html' ? htmlBody : richBody
+    if (!body.trim() || body === '<p></p>') { setError('Message body is required.'); return }
+
+    const fd = new FormData()
+    fd.set('to', toRecipients.map((r) => r.handle).join(','))
+    fd.set('cc', ccRecipients.map((r) => r.handle).join(','))
+    fd.set('subject', subject)
+    fd.set('body', body)
+    fd.set('content_type', contentType)
+
+    startTransition(async () => {
+      const result = await sendMessage(fd)
+      if (result?.error) setError(result.error)
+    })
+  }
+
+  return (
+    <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-background)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+        style={{ borderColor: 'var(--color-border-subtle)', backgroundColor: 'var(--color-surface-raised)' }}>
+        <h2 className="font-semibold text-base" style={{ color: 'var(--color-foreground)' }}>New message</h2>
+        <button type="button" onClick={() => router.back()} className="p-1.5 rounded-md"
+          style={{ color: 'var(--color-muted-foreground)' }}>
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-6 py-6 space-y-5">
+
+          {/* To */}
+          <RecipientInput
+            label="To"
+            recipients={toRecipients}
+            onAdd={(p) => setToRecipients((prev) => [...prev, p])}
+            onRemove={(id) => setToRecipients((prev) => prev.filter((r) => r.id !== id))}
+          />
+
+          {/* CC */}
+          {!showCc ? (
+            <button type="button" onClick={() => setShowCc(true)}
+              className="flex items-center gap-1.5 text-xs"
+              style={{ color: 'var(--color-muted-foreground)' }}>
+              <Plus size={12} /> Add CC
+            </button>
+          ) : (
+            <RecipientInput
+              label="CC"
+              recipients={ccRecipients}
+              onAdd={(p) => setCcRecipients((prev) => [...prev, p])}
+              onRemove={(id) => setCcRecipients((prev) => prev.filter((r) => r.id !== id))}
+            />
+          )}
+
+          {/* Subject */}
+          <div className="space-y-1.5">
+            <Label htmlFor="subject">Subject</Label>
+            <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)}
+              placeholder="What's this about?" />
+          </div>
+
+          {/* Message type — inline tabs */}
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {MSG_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setContentType(t.value)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all"
+                  style={{
+                    borderColor: contentType === t.value ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: contentType === t.value ? 'var(--color-accent)' : 'transparent',
+                    color: contentType === t.value ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                  }}
+                >
+                  <t.icon size={12} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Body — rich text or HTML */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Message</Label>
+              <div className="flex items-center gap-1 rounded-lg p-0.5"
+                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <button type="button" onClick={() => setBodyMode('rich')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: bodyMode === 'rich' ? 'var(--color-surface-raised)' : 'transparent',
+                    color: bodyMode === 'rich' ? 'var(--color-foreground)' : 'var(--color-muted-foreground)',
+                  }}>
+                  <FileText size={11} /> Text
+                </button>
+                <button type="button" onClick={() => setBodyMode('html')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: bodyMode === 'html' ? 'var(--color-surface-raised)' : 'transparent',
+                    color: bodyMode === 'html' ? 'var(--color-foreground)' : 'var(--color-muted-foreground)',
+                  }}>
+                  <Code2 size={11} /> HTML
+                </button>
+              </div>
+            </div>
+
+            {bodyMode === 'rich' ? (
+              <RichEditor value={richBody} onChange={setRichBody} />
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                    Write raw HTML — great for forms, custom layouts, and interactive content.
+                  </p>
+                  <button type="button" onClick={() => setShowHtmlPreview(!showHtmlPreview)}
+                    className="flex items-center gap-1 text-xs font-medium"
+                    style={{ color: 'var(--color-primary)' }}>
+                    <Eye size={12} />
+                    {showHtmlPreview ? 'Hide preview' : 'Preview'}
+                  </button>
+                </div>
+                <textarea
+                  value={htmlBody}
+                  onChange={(e) => setHtmlBody(e.target.value)}
+                  placeholder="<p>Your HTML here…</p>"
+                  rows={10}
+                  className="w-full rounded-lg border px-3 py-2.5 text-sm resize-y focus:outline-none font-mono"
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    backgroundColor: 'var(--color-surface)',
+                    color: 'var(--color-foreground)',
+                    lineHeight: '1.6',
+                  }}
+                />
+                {showHtmlPreview && htmlBody && (
+                  <div className="rounded-lg border overflow-hidden"
+                    style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="px-3 py-1.5 border-b text-xs font-medium"
+                      style={{ borderColor: 'var(--color-border-subtle)', backgroundColor: 'var(--color-surface-raised)', color: 'var(--color-muted-foreground)' }}>
+                      Preview
+                    </div>
+                    <div
+                      className="p-4 prose prose-sm max-w-none"
+                      style={{ backgroundColor: '#ffffff', color: '#202124' }}
+                      dangerouslySetInnerHTML={{ __html: htmlBody }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="text-sm px-3 py-2 rounded-lg" style={{
+              backgroundColor: 'oklch(0.97 0.02 27)',
+              color: 'var(--color-destructive)',
+              border: '1px solid oklch(0.90 0.05 27)',
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-2">
+            <Button type="submit" disabled={isPending}
+              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}>
+              {isPending
+                ? <><Loader2 size={14} className="animate-spin mr-2" />Sending…</>
+                : totalRecipients > 1 ? `Send to ${totalRecipients}` : 'Send'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              Discard
+            </Button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  )
+}
