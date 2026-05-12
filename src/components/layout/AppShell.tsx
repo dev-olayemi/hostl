@@ -18,6 +18,7 @@ import {
 import { signOut } from '@/app/(auth)/actions'
 import { getLabels } from '@/app/(app)/labels/actions'
 import { cn } from '@/lib/utils'
+import VerifiedBadge from '@/components/ui/VerifiedBadge'
 import type { Label } from '@/types'
 
 const MAIN_NAV = [

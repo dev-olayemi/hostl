@@ -9,12 +9,14 @@ import { Label } from '@/components/ui/label'
 import { signUp, checkHandleAvailable } from '@/app/(auth)/actions'
 import { isValidHandle, generateHandleSuggestions } from '@/lib/handle-utils'
 
-type AccountType = 'personal' | 'company' | 'organization'
+type AccountType = 'personal' | 'company' | 'organization' | 'commerce' | 'service'
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; desc: string }[] = [
-  { value: 'personal', label: 'Personal', desc: 'For individuals' },
-  { value: 'company', label: 'Company', desc: 'For businesses' },
-  { value: 'organization', label: 'Organization', desc: 'For nonprofits & institutions' },
+  { value: 'personal',     label: 'Personal',     desc: 'For individuals' },
+  { value: 'company',      label: 'Company',      desc: 'For businesses & orgs' },
+  { value: 'organization', label: 'Organization', desc: 'Nonprofits & institutions' },
+  { value: 'commerce',     label: 'Commerce',     desc: 'E-commerce & marketplaces' },
+  { value: 'service',      label: 'Service',      desc: 'API/SDK integrations' },
 ]
 
 type HandleStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
@@ -196,7 +198,7 @@ export default function SignupForm() {
           {/* Account type */}
           <div className="space-y-2">
             <Label>Account type</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {ACCOUNT_TYPES.map((t) => (
                 <button
                   key={t.value}

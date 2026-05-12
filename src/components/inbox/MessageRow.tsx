@@ -3,6 +3,7 @@
 import { Star, CheckSquare, CalendarCheck, ClipboardList, FileText } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import VerifiedBadge from '@/components/ui/VerifiedBadge'
 import type { Message } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -101,7 +102,11 @@ export default function MessageRow({ message, isSelected, isChecked, onSelect, o
           >
             {from_profile?.display_name ?? 'Unknown'}
             {from_profile?.verified && (
-              <span className="ml-1 text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>
+              <VerifiedBadge
+                accountType={from_profile.account_type}
+                size={13}
+                className="ml-1"
+              />
             )}
           </span>
           <span className="text-xs shrink-0" style={{ color: 'var(--color-muted-foreground)' }}>

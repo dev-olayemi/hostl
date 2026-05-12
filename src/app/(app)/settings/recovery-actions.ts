@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import {
-  SYSTEM_PROFILE_ID, SYSTEM_HANDLE, SYSTEM_DISPLAY_NAME,
-  generateVerificationCode
+  SYSTEM_PROFILE_ID,
+  generateVerificationCode,
 } from '@/lib/system'
 
 function getAdmin() {
@@ -16,6 +16,15 @@ function getAdmin() {
   )
 }
 
+function friendlyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (msg.includes('ConnectTimeout') || msg.includes('fetch failed') || msg.includes('ECONNREFUSED')) {
+    return 'Connection timed out. Please check your internet and try again.'
+  }
+  if (msg.includes('rate limit')) return 'Too many attempts. Please wait a moment and try again.'
+  return 'Something went wrong. Please try again.'
+}
+
 async function getUserId() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,92 +32,71 @@ async function getUserId() {
   return user.id
 }
 
-/** Ensure the @hostl system profile exists in the DB */
-async function ensureSystemProfile(admin: ReturnType<typeof getAdminClient>) {
-  const { data } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('id', SYSTEM_PROFILE_ID)
-    .maybeSingle()
-
-  if (!data) {
-    // Insert system profile — bypasses auth.users FK using service role
-    await admin.rpc('insert_system_profile', {
-      p_id: SYSTEM_PROFILE_ID,
-      p_handle: SYSTEM_HANDLE,
-      p_display_name: SYSTEM_DISPLAY_NAME,
-    }).catch(() => {
-      // If RPC doesn't exist, try direct insert
-      // The profiles table FK to auth.users may block this —
-      // in that case, run the SQL below in Supabase:
-      // INSERT INTO profiles (id, handle, display_name, first_name, last_name, date_of_birth, verified, avatar_url)
-      // VALUES ('00000000-0000-0000-0000-000000000001', 'hostl', 'Hostl', 'Hostl', 'System', '2024-01-01', true, '/hostl-icon.png')
-      // ON CONFLICT DO NOTHING;
-    })
-  }
-}
-
-/**
- * Step 1: Send a verification code to the target recovery handle.
- * Creates a system message in the target user's inbox.
- */
 export async function sendRecoveryVerificationCode(targetHandle: string) {
-  const userId = await getUserId()
-  const admin = getAdmin()
+  try {
+    const userId = await getUserId()
+    const admin = getAdmin()
 
-  const cleanHandle = targetHandle.replace('@', '').trim().toLowerCase()
-  if (!cleanHandle) return { error: 'Please enter a valid Hostl ID.' }
+    const cleanHandle = targetHandle.replace('@', '').trim().toLowerCase()
+    if (!cleanHandle) return { error: 'Please enter a valid Hostl ID.' }
 
-  // Can't use your own handle as recovery
-  const { data: ownProfile } = await admin
-    .from('profiles')
-    .select('handle')
-    .eq('id', userId)
-    .single()
+    // Can't use your own handle
+    const { data: ownProfile } = await admin
+      .from('profiles')
+      .select('handle')
+      .eq('id', userId)
+      .single()
 
-  if (ownProfile?.handle === cleanHandle) {
-    return { error: 'You cannot use your own Hostl ID as a recovery handle.' }
-  }
+    if (ownProfile?.handle === cleanHandle) {
+      return { error: 'You cannot use your own Hostl ID as a recovery handle.' }
+    }
 
-  // Check target handle exists
-  const { data: targetProfile } = await admin
-    .from('profiles')
-    .select('id, handle, display_name')
-    .eq('handle', cleanHandle)
-    .maybeSingle()
+    // Check target exists
+    const { data: targetProfile, error: targetError } = await admin
+      .from('profiles')
+      .select('id, handle, display_name')
+      .eq('handle', cleanHandle)
+      .maybeSingle()
 
-  if (!targetProfile) {
-    return { error: `@${cleanHandle} is not a Hostl account.` }
-  }
+    if (targetError) return { error: friendlyError(targetError) }
+    if (!targetProfile) return { error: `@${cleanHandle} is not a Hostl account.` }
 
-  const code = generateVerificationCode()
+    const code = generateVerificationCode()
 
-  // Store the verification record
-  await admin
-    .from('recovery_handle_verifications')
-    .upsert({
-      profile_id: userId,
-      target_handle: cleanHandle,
-      code,
-      verified: false,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    }, { onConflict: 'profile_id' })
+    // Store verification record — delete old one first, then insert fresh
+    await admin
+      .from('recovery_handle_verifications')
+      .delete()
+      .eq('profile_id', userId)
 
-  // Send a system message to the target handle's inbox
-  // First ensure system profile exists
-  await ensureSystemProfile(admin)
+    const { error: insertError } = await admin
+      .from('recovery_handle_verifications')
+      .insert({
+        profile_id: userId,
+        target_handle: cleanHandle,
+        code,
+        verified: false,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      })
 
-  // Create thread
-  const { data: thread } = await admin
-    .from('threads')
-    .insert({
-      subject: 'Recovery handle verification',
-      created_by: SYSTEM_PROFILE_ID,
-    })
-    .select('id')
-    .single()
+    if (insertError) return { error: `Could not save verification: ${insertError.message}` }
 
-  if (thread) {
+    // Send system message to target's inbox
+    const { data: thread, error: threadError } = await admin
+      .from('threads')
+      .insert({
+        subject: 'Recovery handle verification code',
+        created_by: SYSTEM_PROFILE_ID,
+      })
+      .select('id')
+      .single()
+
+    if (threadError || !thread) {
+      // Message failed but code is saved — user can still verify manually
+      console.error('Thread creation failed:', threadError?.message)
+      return { success: true, targetHandle: cleanHandle, messageWarning: true }
+    }
+
     await admin.from('thread_participants').insert([
       { thread_id: thread.id, profile_id: SYSTEM_PROFILE_ID },
       { thread_id: thread.id, profile_id: targetProfile.id },
@@ -120,18 +108,17 @@ export async function sendRecoveryVerificationCode(targetHandle: string) {
     Someone is adding <strong>@${cleanHandle}</strong> as their Hostl account recovery handle.
   </p>
   <p style="font-size:14px;line-height:1.6;margin:0 0 24px;">
-    If you recognize this request, share the verification code below with them:
+    If you recognise this request, share the verification code below with them:
   </p>
   <div style="background:#f4f4f7;border-radius:8px;padding:20px;text-align:center;margin:0 0 24px;">
     <span style="font-size:28px;font-weight:700;letter-spacing:4px;color:#1a1a2e;font-family:monospace;">${code}</span>
   </div>
   <p style="font-size:12px;color:#9aa0a6;line-height:1.6;margin:0;">
-    This code expires in 24 hours. If you don't recognize this request, ignore this message.
+    This code expires in 24 hours. If you don't recognise this request, ignore this message.
   </p>
-</div>
-    `.trim()
+</div>`.trim()
 
-    await admin.from('messages').insert({
+    const { error: msgError } = await admin.from('messages').insert({
       thread_id: thread.id,
       from_profile_id: SYSTEM_PROFILE_ID,
       to_profile_id: targetProfile.id,
@@ -143,45 +130,54 @@ export async function sendRecoveryVerificationCode(targetHandle: string) {
       is_important: true,
       action_completed: false,
     })
-  }
 
-  return { success: true, targetHandle: cleanHandle }
+    if (msgError) {
+      console.error('Message insert failed:', msgError.message)
+      return { success: true, targetHandle: cleanHandle, messageWarning: true }
+    }
+
+    return { success: true, targetHandle: cleanHandle }
+  } catch (err) {
+    return { error: friendlyError(err) }
+  }
 }
 
-/**
- * Step 2: Verify the code entered by the user.
- */
 export async function verifyRecoveryCode(code: string) {
-  const userId = await getUserId()
-  const admin = getAdmin()
+  try {
+    const userId = await getUserId()
+    const admin = getAdmin()
 
-  const { data: record } = await admin
-    .from('recovery_handle_verifications')
-    .select('*')
-    .eq('profile_id', userId)
-    .eq('verified', false)
-    .single()
+    const { data: record, error: fetchError } = await admin
+      .from('recovery_handle_verifications')
+      .select('*')
+      .eq('profile_id', userId)
+      .eq('verified', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
 
-  if (!record) return { error: 'No pending verification found.' }
+    if (fetchError || !record) return { error: 'No pending verification found. Please request a new code.' }
 
-  if (new Date(record.expires_at) < new Date()) {
-    return { error: 'Verification code has expired. Please request a new one.' }
+    if (new Date(record.expires_at) < new Date()) {
+      return { error: 'This code has expired. Please request a new one.' }
+    }
+
+    if (record.code !== code.trim().toUpperCase()) {
+      return { error: 'Incorrect code. Double-check and try again.' }
+    }
+
+    await admin
+      .from('recovery_handle_verifications')
+      .update({ verified: true })
+      .eq('id', record.id)
+
+    await admin
+      .from('profiles')
+      .update({ recovery_handle: record.target_handle })
+      .eq('id', userId)
+
+    return { success: true, handle: record.target_handle }
+  } catch (err) {
+    return { error: friendlyError(err) }
   }
-
-  if (record.code !== code.trim().toUpperCase()) {
-    return { error: 'Incorrect code. Please check and try again.' }
-  }
-
-  // Mark verified and save the recovery handle
-  await admin
-    .from('recovery_handle_verifications')
-    .update({ verified: true })
-    .eq('id', record.id)
-
-  await admin
-    .from('profiles')
-    .update({ recovery_handle: record.target_handle })
-    .eq('id', userId)
-
-  return { success: true, handle: record.target_handle }
 }

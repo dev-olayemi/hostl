@@ -14,6 +14,7 @@ import AvatarUpload from '@/components/settings/AvatarUpload'
 import { updateProfile } from './actions'
 import { sendRecoveryVerificationCode, verifyRecoveryCode } from './recovery-actions'
 import { COUNTRIES, getCountry } from '@/lib/countries'
+import VerifiedBadge from '@/components/ui/VerifiedBadge'
 
 interface Props {
   profile: Record<string, string> | null
@@ -71,7 +72,12 @@ function RecoveryHandleField({
     startTransition(async () => {
       const res = await sendRecoveryVerificationCode(inputHandle)
       if (res?.error) setError(res.error)
-      else setStep('sent')
+      else {
+        setStep('sent')
+        if ((res as { messageWarning?: boolean }).messageWarning) {
+          setError('Code generated but the message could not be delivered. Ask @' + inputHandle + ' to check their inbox, or try again.')
+        }
+      }
     })
   }
 
@@ -243,7 +249,9 @@ export default function SettingsClient({ profile }: Props) {
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted-foreground)' }}>
                 @{handle}
-                {verified && <span className="ml-1.5 text-xs" style={{ color: 'var(--color-primary)' }}>✓ Verified</span>}
+                {verified && (
+                  <VerifiedBadge accountType={accountType} size={13} className="ml-1.5" />
+                )}
               </p>
               <p className="text-xs mt-2" style={{ color: 'var(--color-muted-foreground)' }}>
                 JPG, PNG, WebP, GIF or SVG · Max 2MB

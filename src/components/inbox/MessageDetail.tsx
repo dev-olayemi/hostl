@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SimpleMenu } from '@/components/ui/simple-menu'
+import VerifiedBadge from '@/components/ui/VerifiedBadge'
 import {
   archiveMessage, trashMessage, markRead, markImportant,
   muteMessage, reportMessage, blockUser,
@@ -225,10 +226,10 @@ export default function MessageDetail({
                   {from_profile?.display_name}
                 </span>
                 {from_profile?.verified && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}>
-                    ✓ Verified
-                  </span>
+                  <VerifiedBadge
+                    accountType={from_profile.account_type}
+                    size={15}
+                  />
                 )}
                 {from_profile?.account_type && from_profile.account_type !== 'personal' && (
                   <span className="text-xs px-1.5 py-0.5 rounded-full capitalize"
