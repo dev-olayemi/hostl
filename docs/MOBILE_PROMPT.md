@@ -66,7 +66,7 @@ The mobile app must deliver the full Hostl experience on iOS and Android:
 
 ## 5. Backend (already built — DO NOT rebuild)
 
-The backend is live at https://hostl.net (Next.js 16 + Supabase).
+The Supabase database is live and accessible. The Next.js web app runs locally (localhost:3000) and is NOT yet deployed to production.
 GitHub: https://github.com/dev-olayemi/hostl
 
 Supabase project: tilbejapfljfvdvqtggo.supabase.co
@@ -80,7 +80,7 @@ Do NOT recreate any tables — they already exist.
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://tilbejapfljfvdvqtggo.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpbGJlamFwZmxqZnZkdnF0Z2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MDQyODMsImV4cCI6MjA5Mzk4MDI4M30.no-GnuZs0No_pxI5t_u4Bu8hl9UiJm58ptZCVh67WBs
-EXPO_PUBLIC_API_URL=https://hostl.net
+EXPO_PUBLIC_API_URL=http://localhost:3000  # change to production URL when deployed
 EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME=dtelqmqjf
 ```
 
@@ -429,7 +429,7 @@ Settings, Bell, Menu, ArrowLeft, Eye, EyeOff, Lock
 - Do NOT use a different color palette — use the tokens above
 - Do NOT use a different icon library — use lucide-react-native
 - Do NOT use a different font — use Inter
-- Do NOT build a separate backend — use the existing one
+- Do NOT rebuild the database schema — it already exists in Supabase. The Next.js API will need to be deployed before the mobile app can use server actions in production
 
 ## 20. First steps (in order)
 
