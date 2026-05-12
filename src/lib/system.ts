@@ -8,7 +8,7 @@
 export const SYSTEM_PROFILE_ID = '00000000-0000-0000-0000-000000000001'
 export const SYSTEM_HANDLE = 'hostl'
 export const SYSTEM_DISPLAY_NAME = 'Hostl'
-export const SYSTEM_AVATAR_URL = '/hostl-icon.png' // served from public/
+export const SYSTEM_AVATAR_URL = '/hostl-icon.png' // small icon — fits in avatar circles
 
 /** Generate a verification code like H-647GF74 */
 export function generateVerificationCode(): string {

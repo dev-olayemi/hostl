@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import AvatarUpload from '@/components/settings/AvatarUpload'
 import { updateProfile } from './actions'
+import { sendRecoveryVerificationCode, verifyRecoveryCode } from './recovery-actions'
 import { COUNTRIES, getCountry } from '@/lib/countries'
 
 interface Props {
@@ -48,6 +49,124 @@ function Field({ label, children, hint }: { label: string; children: React.React
       <Label>{label}</Label>
       {children}
       {hint && <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>{hint}</p>}
+    </div>
+  )
+}
+
+// ── Recovery handle verification widget ──────────────────────
+function RecoveryHandleField({
+  currentHandle, onVerified,
+}: { currentHandle: string; onVerified: (h: string) => void }) {
+  const [step, setStep] = useState<'idle' | 'sent' | 'verified'>('idle')
+  const [inputHandle, setInputHandle] = useState(currentHandle)
+  const [code, setCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  // If already set, show as verified
+  const isVerified = step === 'verified' || (currentHandle && step === 'idle')
+
+  function handleSendCode() {
+    setError(null)
+    startTransition(async () => {
+      const res = await sendRecoveryVerificationCode(inputHandle)
+      if (res?.error) setError(res.error)
+      else setStep('sent')
+    })
+  }
+
+  function handleVerifyCode() {
+    setError(null)
+    startTransition(async () => {
+      const res = await verifyRecoveryCode(code)
+      if (res?.error) setError(res.error)
+      else {
+        setStep('verified')
+        onVerified(res.handle!)
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <Label>Recovery Hostl ID</Label>
+        <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+          If you lose access, messages can be sent to this @handle to help you recover your account.
+        </p>
+      </div>
+
+      {/* Current verified handle */}
+      {currentHandle && step !== 'sent' && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+          <AtSign size={14} style={{ color: 'var(--color-muted-foreground)' }} />
+          <span style={{ color: 'var(--color-foreground)' }}>@{currentHandle}</span>
+          <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
+            style={{ backgroundColor: 'oklch(0.95 0.05 145)', color: 'oklch(0.45 0.18 145)' }}>
+            ✓ Verified
+          </span>
+          <button type="button" onClick={() => { setStep('idle'); setInputHandle('') }}
+            className="text-xs underline" style={{ color: 'var(--color-muted-foreground)' }}>
+            Change
+          </button>
+        </div>
+      )}
+
+      {/* Input + send code */}
+      {(!currentHandle || step === 'idle') && step !== 'sent' && (
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2"
+              style={{ color: 'var(--color-muted-foreground)' }} />
+            <Input
+              value={inputHandle}
+              onChange={(e) => setInputHandle(e.target.value.replace('@', '').replace(/[^a-zA-Z0-9_-]/g, ''))}
+              placeholder="recovery-handle"
+              className="pl-8"
+            />
+          </div>
+          <Button type="button" onClick={handleSendCode}
+            disabled={isPending || !inputHandle.trim()}
+            style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}>
+            {isPending ? <Loader2 size={14} className="animate-spin" /> : 'Send code'}
+          </Button>
+        </div>
+      )}
+
+      {/* Code entry */}
+      {step === 'sent' && (
+        <div className="space-y-3 rounded-xl p-4"
+          style={{ backgroundColor: 'var(--color-accent)', border: '1px solid var(--color-border-subtle)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-foreground)' }}>
+            A verification code was sent to <strong>@{inputHandle}</strong>'s inbox.
+            Ask them to share it with you.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9H-]/g, ''))}
+              placeholder="H-XXXXXXX"
+              className="font-mono tracking-widest text-center"
+              maxLength={9}
+              onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
+            />
+            <Button type="button" onClick={handleVerifyCode}
+              disabled={isPending || code.length < 9}
+              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}>
+              {isPending ? <Loader2 size={14} className="animate-spin" /> : 'Verify'}
+            </Button>
+          </div>
+          <button type="button" onClick={() => setStep('idle')}
+            className="text-xs underline" style={{ color: 'var(--color-muted-foreground)' }}>
+            Use a different handle
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs" style={{ color: 'var(--color-destructive)' }}>{error}</p>
+      )}
     </div>
   )
 }
@@ -273,16 +392,10 @@ export default function SettingsClient({ profile }: Props) {
 
         {/* ── Security ── */}
         <Section title="Security & recovery" icon={Shield}>
-          <Field label="Recovery Hostl ID"
-            hint="If you lose access to your account, messages can be sent to this @handle to help you recover it. Must be an existing Hostl account.">
-            <div className="relative">
-              <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: 'var(--color-muted-foreground)' }} />
-              <Input name="recovery_handle" value={recoveryHandle}
-                onChange={(e) => setRecoveryHandle(e.target.value.replace('@', '').replace(/[^a-zA-Z0-9_-]/g, ''))}
-                placeholder="recovery-handle" className="pl-8" />
-            </div>
-          </Field>
+          <RecoveryHandleField
+            currentHandle={recoveryHandle}
+            onVerified={(h) => setRecoveryHandle(h)}
+          />
 
           <div className="pt-1">
             <Link href="/forgot-password">
