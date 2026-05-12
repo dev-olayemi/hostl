@@ -14,6 +14,7 @@ import MessageDetail from './MessageDetail'
 import { createClient } from '@/lib/supabase/client'
 import {
   bulkMarkRead, bulkArchive, bulkTrash, bulkMarkImportant,
+  markRead as markReadAction,
 } from '@/app/(app)/message-actions'
 import type { Message, MessageCategory } from '@/types'
 
@@ -56,8 +57,8 @@ export default function InboxView({ category }: InboxViewProps) {
       .from('messages')
       .select(`
         *,
-        from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type),
-        to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type)
+        from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
+        to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system)
       `)
       .eq(column, user.id)
       .eq('category', category === 'sent' ? 'inbox' : category)
@@ -113,9 +114,14 @@ export default function InboxView({ category }: InboxViewProps) {
 
   // ── Single message actions ─────────────────────────────────
   function markRead(id: string, isRead = true) {
+    // Update local state immediately for instant UI feedback
     updateMessages([id], { is_read: isRead })
-    const supabase = createClient()
-    supabase.from('messages').update({ is_read: isRead }).eq('id', id)
+    // Persist to DB — use the server action which has proper auth
+    markReadAction(id, isRead).catch((err) => {
+      console.error('markRead failed:', err)
+      // Revert local state if DB update failed
+      updateMessages([id], { is_read: !isRead })
+    })
   }
 
   function toggleImportant(id: string) {

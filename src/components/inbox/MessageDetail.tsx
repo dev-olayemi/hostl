@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SimpleMenu } from '@/components/ui/simple-menu'
 import VerifiedBadge from '@/components/ui/VerifiedBadge'
+import { isSystemProfile } from '@/lib/system'
 import {
   archiveMessage, trashMessage, markRead, markImportant,
   muteMessage, reportMessage, blockUser,
@@ -226,15 +227,22 @@ export default function MessageDetail({
                   {from_profile?.display_name}
                 </span>
                 {from_profile?.verified && (
-                  <VerifiedBadge
-                    accountType={from_profile.account_type}
-                    size={15}
-                  />
+                  <>
+                    {/* System accounts get both the service (shield/purple) + verified (circle/blue) badges */}
+                    {isSystemProfile(from_profile) ? (
+                      <>
+                        <VerifiedBadge accountType="service" size={15} />
+                        <VerifiedBadge accountType="personal" size={15} />
+                      </>
+                    ) : (
+                      <VerifiedBadge accountType={from_profile.account_type} size={15} />
+                    )}
+                  </>
                 )}
                 {from_profile?.account_type && from_profile.account_type !== 'personal' && (
                   <span className="text-xs px-1.5 py-0.5 rounded-full capitalize"
                     style={{ backgroundColor: 'var(--color-border-subtle)', color: 'var(--color-muted-foreground)' }}>
-                    {from_profile.account_type}
+                    {isSystemProfile(from_profile) ? 'System' : from_profile.account_type}
                   </span>
                 )}
               </div>
@@ -255,7 +263,7 @@ export default function MessageDetail({
                     { label: 'date',    value: fullDate },
                     { label: 'subject', value: subject },
                     { label: 'type',    value: config.label ?? 'Message' },
-                    { label: 'account', value: from_profile?.account_type ?? 'personal' },
+                    { label: 'account', value: isSystemProfile(from_profile) ? 'System' : (from_profile?.account_type ?? 'personal') },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex gap-3">
                       <span className="w-16 shrink-0 text-right font-medium" style={{ color: 'var(--color-muted-foreground)' }}>

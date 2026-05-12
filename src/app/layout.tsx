@@ -17,7 +17,9 @@ export const metadata: Metadata = {
     'Send, receive, and complete actions entirely inside one seamless app. No more clicking links and leaving for external websites.',
   metadataBase: new URL('https://hostl.net'),
   icons: {
-    icon: '/hostl-icon.png',
+    icon: [
+      { url: '/hostl-icon.png', type: 'image/png' },
+    ],
     shortcut: '/hostl-icon.png',
     apple: '/hostl-icon.png',
   },

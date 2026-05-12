@@ -19,6 +19,7 @@ import { signOut } from '@/app/(auth)/actions'
 import { getLabels } from '@/app/(app)/labels/actions'
 import { cn } from '@/lib/utils'
 import VerifiedBadge from '@/components/ui/VerifiedBadge'
+import DynamicTitle from '@/components/layout/DynamicTitle'
 import type { Label } from '@/types'
 
 const MAIN_NAV = [
@@ -73,6 +74,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
   const [showMore, setShowMore] = useState(false)
   const [labels, setLabels] = useState<Label[]>([])
   const [showLabels, setShowLabels] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   const displayName = profile?.display_name || `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
   const handle = profile?.handle ? `@${profile.handle}` : ''
@@ -81,12 +83,29 @@ export default function AppShell({ children, profile }: AppShellProps) {
 
   useEffect(() => {
     getLabels().then(setLabels).catch(() => {})
+
+    // Fetch unread count
+    async function fetchUnread() {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('to_profile_id', user.id)
+        .eq('is_read', false)
+        .eq('category', 'inbox')
+      setUnreadCount(count ?? 0)
+    }
+    fetchUnread()
   }, [])
 
   const close = () => setSidebarOpen(false)
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-background)' }}>
+      <DynamicTitle unreadCount={unreadCount} />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-20 lg:hidden" style={{ backgroundColor: 'oklch(0 0 0 / 0.4)' }}
@@ -130,7 +149,9 @@ export default function AppShell({ children, profile }: AppShellProps) {
         <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 pb-2">
           {/* Main nav */}
           {MAIN_NAV.map((item) => (
-            <NavLink key={item.href} {...item} active={pathname === item.href} onClick={close} />
+            <NavLink key={item.href} {...item}
+              count={item.href === '/inbox' ? unreadCount : undefined}
+              active={pathname === item.href} onClick={close} />
           ))}
 
           {/* More toggle */}

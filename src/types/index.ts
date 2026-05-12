@@ -4,12 +4,13 @@ export type AccountType = 'personal' | 'company' | 'organization'
 
 export interface HostlProfile {
   id: string
-  handle: string // e.g. @muhammed-dev
+  handle: string
   display_name: string
   account_type: AccountType
   avatar_url: string | null
   bio: string | null
   verified: boolean
+  is_system: boolean        // true only for the @hostl platform account
   created_at: string
   updated_at: string
 }

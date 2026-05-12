@@ -48,11 +48,12 @@ export async function trashMessage(messageId: string) {
 export async function markRead(messageId: string, isRead: boolean) {
   const userId = await getUserId()
   const admin = getAdmin()
+  // Only the recipient can mark a message read/unread
   const { error } = await admin
     .from('messages')
     .update({ is_read: isRead })
     .eq('id', messageId)
-    .or(`to_profile_id.eq.${userId},from_profile_id.eq.${userId}`)
+    .eq('to_profile_id', userId)
   return error ? { error: error.message } : { success: true }
 }
 

@@ -4,6 +4,7 @@ import { Star, CheckSquare, CalendarCheck, ClipboardList, FileText } from 'lucid
 import { formatDistanceToNow } from 'date-fns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import VerifiedBadge from '@/components/ui/VerifiedBadge'
+import { isSystemProfile } from '@/lib/system'
 import type { Message } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -82,15 +83,13 @@ export default function MessageRow({ message, isSelected, isChecked, onSelect, o
 
       {/* Avatar */}
       <Avatar className="w-9 h-9 shrink-0 mt-0.5">
-        <AvatarFallback
-          className="text-xs font-semibold"
-          style={{
-            backgroundColor: 'var(--color-hostl-100)',
-            color: 'var(--color-hostl-700)',
-          }}
-        >
-          {initials}
-        </AvatarFallback>
+        {from_profile?.avatar_url
+          ? <img src={from_profile.avatar_url} alt={from_profile.display_name ?? ''} className="w-9 h-9 rounded-full object-cover" />
+          : <AvatarFallback className="text-xs font-semibold"
+              style={{ backgroundColor: 'var(--color-hostl-100)', color: 'var(--color-hostl-700)' }}>
+              {initials}
+            </AvatarFallback>
+        }
       </Avatar>
 
       {/* Content */}
@@ -102,11 +101,16 @@ export default function MessageRow({ message, isSelected, isChecked, onSelect, o
           >
             {from_profile?.display_name ?? 'Unknown'}
             {from_profile?.verified && (
-              <VerifiedBadge
-                accountType={from_profile.account_type}
-                size={13}
-                className="ml-1"
-              />
+              <>
+                {isSystemProfile(from_profile) ? (
+                  <>
+                    <VerifiedBadge accountType="service" size={13} className="ml-1" />
+                    <VerifiedBadge accountType="personal" size={13} />
+                  </>
+                ) : (
+                  <VerifiedBadge accountType={from_profile.account_type} size={13} className="ml-1" />
+                )}
+              </>
             )}
           </span>
           <span className="text-xs shrink-0" style={{ color: 'var(--color-muted-foreground)' }}>
