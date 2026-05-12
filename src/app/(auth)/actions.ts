@@ -93,7 +93,7 @@ export async function signUp(formData: FormData) {
     })
     if (signInError) return { error: 'Account created. Please sign in with your new Hostl ID.' }
 
-    redirect('/inbox')
+    return { redirect: '/inbox' }
   } catch (err) {
     return { error: friendlyError(err) }
   }
@@ -131,7 +131,7 @@ export async function signIn(formData: FormData) {
     })
     if (error) return { error: friendlyError(error) }
 
-    redirect('/inbox')
+    return { redirect: '/inbox' }
   } catch (err) {
     return { error: friendlyError(err) }
   }

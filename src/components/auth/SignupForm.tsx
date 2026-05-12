@@ -79,6 +79,7 @@ export default function SignupForm() {
     startTransition(async () => {
       const result = await signUp(fd)
       if (result?.error) setError(result.error)
+      else if (result?.redirect) window.location.href = result.redirect
     })
   }
 

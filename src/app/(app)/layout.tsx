@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import AppShell from '@/components/layout/AppShell'
+import ProtocolHandler from '@/components/layout/ProtocolHandler'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppShell profile={profileData}>
+      <ProtocolHandler />
       {children}
     </AppShell>
   )

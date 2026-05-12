@@ -43,28 +43,47 @@ export default function InboxView({ category }: InboxViewProps) {
 
   useEffect(() => {
     loadMessages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category])
 
   async function loadMessages() {
     setLoading(true)
     setSelected(new Set())
     const supabase = createClient()
+
+    // Wait for session to be ready
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      // Try getUser as fallback
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const column = category === 'sent' ? 'from_profile_id' : 'to_profile_id'
-    const { data } = await supabase
+    let query = supabase
       .from('messages')
       .select(`
         *,
         from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
         to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system)
       `)
-      .eq(column, user.id)
-      .eq('category', category === 'sent' ? 'inbox' : category)
-      .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
+    if (category === 'sent') {
+      query = query.eq('from_profile_id', user.id)
+    } else {
+      query = query.eq('to_profile_id', user.id).eq('category', category)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('InboxView query error:', error.message, error.code, error.details)
+    }
+
+    console.log('InboxView loaded:', { category, userId: user.id, count: data?.length, error: error?.message })
     setMessages((data as Message[]) ?? [])
     setLoading(false)
   }

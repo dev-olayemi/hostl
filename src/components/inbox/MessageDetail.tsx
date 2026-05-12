@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator'
 import { SimpleMenu } from '@/components/ui/simple-menu'
 import VerifiedBadge from '@/components/ui/VerifiedBadge'
 import { isSystemProfile } from '@/lib/system'
+import MessageBody from './MessageBody'
 import {
   archiveMessage, trashMessage, markRead, markImportant,
   muteMessage, reportMessage, blockUser,
@@ -284,14 +285,7 @@ export default function MessageDetail({
           <Separator style={{ backgroundColor: 'var(--color-border-subtle)' }} />
 
           {/* Body */}
-          {isHtml ? (
-            <div className="prose prose-sm max-w-none" style={{ color: 'var(--color-foreground)' }}
-              dangerouslySetInnerHTML={{ __html: body }} />
-          ) : (
-            <div className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-foreground)' }}>
-              {body}
-            </div>
-          )}
+          <MessageBody body={body} isHtml={isHtml} />
 
           {/* Interactive action area */}
           {content_type !== 'text' && (
@@ -382,7 +376,7 @@ export default function MessageDetail({
 
       {/* Report modal */}
       {showReportMenu && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center"
+        <div className="fixed inset-0 z-9999 flex items-center justify-center"
           style={{ backgroundColor: 'oklch(0 0 0 / 0.4)' }}
           onClick={() => setShowReportMenu(false)}>
           <div className="rounded-xl p-6 w-full max-w-sm space-y-4"

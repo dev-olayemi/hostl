@@ -24,6 +24,7 @@ export default function LoginForm() {
     startTransition(async () => {
       const result = await signIn(fd)
       if (result?.error) setError(result.error)
+      else if (result?.redirect) window.location.href = result.redirect
     })
   }
 
