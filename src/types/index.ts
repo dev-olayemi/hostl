@@ -48,6 +48,8 @@ export interface Label {
   color: string
   created_at: string
 }
+
+export interface Thread {
   id: string
   subject: string
   participants: string[] // profile ids

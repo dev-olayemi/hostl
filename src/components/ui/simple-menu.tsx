@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 interface MenuItem {
-  label: string
+  label?: string
   icon?: React.ElementType
   onClick?: () => void
   danger?: boolean
