@@ -78,7 +78,7 @@ export default function VerificationForm({ accountType, verified, existing }: Pr
         <h1 className="text-xl font-semibold" style={{ color: 'var(--color-foreground)' }}>Verification</h1>
         <div className="rounded-xl p-5 flex items-start gap-4"
           style={{ backgroundColor: STATUS_CONFIG.approved.bg, border: `1px solid ${STATUS_CONFIG.approved.border}` }}>
-          <BadgeCheck size={24} style={{ color: STATUS_CONFIG.approved.color, shrink: 0 }} />
+          <BadgeCheck size={24} style={{ color: STATUS_CONFIG.approved.color, flexShrink: 0 }} />
           <div>
             <p className="font-semibold text-sm" style={{ color: STATUS_CONFIG.approved.color }}>Your account is verified</p>
             <p className="text-sm mt-1" style={{ color: 'var(--color-muted-foreground)' }}>{STATUS_CONFIG.approved.desc}</p>
