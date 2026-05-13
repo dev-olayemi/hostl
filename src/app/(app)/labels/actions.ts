@@ -100,8 +100,9 @@ export async function getMessagesByLabel(labelId: string) {
 
   // Filter to only messages the user owns
   return (data ?? [])
-    .map((row: Record<string, unknown>) => row.message)
-    .filter((m: Record<string, unknown>) =>
-      m?.to_profile_id === userId || m?.from_profile_id === userId
-    )
+    .map((row: unknown) => (row as Record<string, unknown>).message as Record<string, unknown>)
+    .filter((m: unknown) => {
+      const msg = m as Record<string, unknown>
+      return msg?.to_profile_id === userId || msg?.from_profile_id === userId
+    })
 }
