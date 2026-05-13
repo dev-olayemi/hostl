@@ -22,7 +22,7 @@ export default function LabelInboxView({ labelId }: { labelId: string }) {
         getMessagesByLabel(labelId),
         getLabels(),
       ])
-      setMessages(msgs as Message[])
+      setMessages((msgs as unknown) as Message[])
       setLabel(labels.find((l) => l.id === labelId) ?? null)
       setLoading(false)
     }

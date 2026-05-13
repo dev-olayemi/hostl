@@ -221,7 +221,7 @@ export default function SettingsClient({ profile }: Props) {
 
   const handle = profile?.handle ?? ''
   const accountType = profile?.account_type ?? 'personal'
-  const verified = profile?.verified === 'true' || profile?.verified === true as unknown as string
+  const verified = profile?.verified === true || profile?.verified === 'true'
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">

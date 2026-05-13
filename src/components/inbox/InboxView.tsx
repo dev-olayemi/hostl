@@ -84,7 +84,7 @@ export default function InboxView({ category }: InboxViewProps) {
     }
 
     console.log('InboxView loaded:', { category, userId: user.id, count: data?.length, error: error?.message })
-    setMessages((data as Message[]) ?? [])
+    setMessages(((data as unknown) as Message[]) ?? [])
     setLoading(false)
   }
 
