@@ -131,7 +131,7 @@ export default function VerificationForm({ accountType, verified, existing }: Pr
       </div>
 
       {/* Current status banner */}
-      {statusConfig && status !== 'approved' && (
+      {statusConfig && (status as string) !== 'approved' && (
         <div className="rounded-xl p-4 flex items-start gap-3"
           style={{ backgroundColor: statusConfig.bg, border: `1px solid ${statusConfig.border}` }}>
           <statusConfig.icon size={18} style={{ color: statusConfig.color, marginTop: 1 }} />
