@@ -48,7 +48,7 @@ export default function MessageRow({ message, isSelected, isChecked, onSelect, o
     <div
       onClick={onSelect}
       className={cn(
-        'flex items-start gap-3 px-4 py-3.5 cursor-pointer border-b transition-colors group relative',
+        'flex items-start gap-3 px-4 py-3.5 cursor-pointer border-b transition-colors group relative w-full overflow-hidden',
         isSelected ? 'bg-[var(--color-accent)]' : 'hover:bg-[var(--color-sidebar-hover)]'
       )}
       style={{ borderColor: 'var(--color-border-subtle)' }}

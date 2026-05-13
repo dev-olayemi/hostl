@@ -104,7 +104,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
   const close = () => setSidebarOpen(false)
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-background)' }}>
+    <div className="flex h-screen overflow-hidden w-screen max-w-full" style={{ backgroundColor: 'var(--color-background)' }}>
       <DynamicTitle unreadCount={unreadCount} />
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -267,22 +267,22 @@ export default function AppShell({ children, profile }: AppShellProps) {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main content — always full width on mobile, flex-1 on desktop */}
+      <div className="flex flex-col min-w-0 overflow-hidden w-full lg:flex-1">
         <header className="lg:hidden flex items-center justify-between px-4 py-3 shrink-0 border-b"
           style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border-subtle)' }}>
-          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-md"
+          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-md shrink-0"
             style={{ color: 'var(--color-muted-foreground)' }}>
             <Menu size={20} />
           </button>
-          <Link href="/inbox">
+          <Link href="/inbox" className="flex-1 flex justify-center">
             <Image src="/hostle.png" alt="Hostl" width={56} height={28} style={{ width: 56, height: 'auto' }} />
           </Link>
-          <button className="p-1.5 rounded-md" style={{ color: 'var(--color-muted-foreground)' }}>
+          <button className="p-1.5 rounded-md shrink-0" style={{ color: 'var(--color-muted-foreground)' }}>
             <Bell size={18} />
           </button>
         </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
       </div>
     </div>
   )

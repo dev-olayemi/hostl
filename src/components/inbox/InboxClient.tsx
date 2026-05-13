@@ -99,9 +99,9 @@ export default function InboxClient({ initialMessages, category }: Props) {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full overflow-hidden">
       {/* Message list */}
-      <div className={`flex flex-col border-r transition-all ${selectedMessage ? 'hidden md:flex md:w-80 lg:w-96' : 'flex-1'}`}
+      <div className={`flex flex-col border-r shrink-0 ${selectedMessage ? 'hidden md:flex md:w-80 lg:w-96' : 'w-full'}`}
         style={{ borderColor: 'var(--color-border-subtle)' }}>
 
         {/* Header */}
