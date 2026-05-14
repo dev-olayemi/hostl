@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Inbox, Star, Send, FileText, Archive, Trash2,
-  PenSquare, Settings, ChevronDown, ChevronRight, Menu, X, Bell,
+  PenSquare, Settings, ChevronDown, ChevronRight, Menu, X,
   BadgeCheck, Users, ShieldAlert, FolderX, Tag, Plus, MoreHorizontal
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -20,6 +20,7 @@ import { getLabels } from '@/app/(app)/labels/actions'
 import { cn } from '@/lib/utils'
 import VerifiedBadge from '@/components/ui/VerifiedBadge'
 import DynamicTitle from '@/components/layout/DynamicTitle'
+import NotificationBell from '@/components/layout/NotificationBell'
 import type { Label } from '@/types'
 
 const MAIN_NAV = [
@@ -282,9 +283,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
           <Link href="/inbox" className="flex-1 flex justify-center">
             <Image src="/hostle.png" alt="Hostl" width={56} height={28} style={{ width: 56, height: 'auto' }} />
           </Link>
-          <button className="p-1.5 rounded-md shrink-0" style={{ color: 'var(--color-muted-foreground)' }}>
-            <Bell size={18} />
-          </button>
+          <NotificationBell />
         </header>
         <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
       </div>
