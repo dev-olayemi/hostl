@@ -76,6 +76,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
   const [labels, setLabels] = useState<Label[]>([])
   const [showLabels, setShowLabels] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
 
   const displayName = profile?.display_name || `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
   const handle = profile?.handle ? `@${profile.handle}` : ''
@@ -85,21 +86,25 @@ export default function AppShell({ children, profile }: AppShellProps) {
   useEffect(() => {
     getLabels().then(setLabels).catch(() => {})
 
-    // Fetch unread count
-    async function fetchUnread() {
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { count } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('to_profile_id', user.id)
-        .eq('is_read', false)
-        .eq('category', 'inbox')
-      setUnreadCount(count ?? 0)
+    // Fetch message counts
+    async function fetchCounts() {
+      try {
+        const response = await fetch('/api/message-counts')
+        const data = await response.json()
+        if (data.counts) {
+          setCategoryCounts(data.counts)
+          setUnreadCount(data.counts.unread || 0)
+        }
+      } catch (error) {
+        console.error('Failed to fetch counts:', error)
+      }
     }
-    fetchUnread()
+    
+    fetchCounts()
+    
+    // Refresh counts every 30 seconds
+    const interval = setInterval(fetchCounts, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const close = () => setSidebarOpen(false)
@@ -153,11 +158,15 @@ export default function AppShell({ children, profile }: AppShellProps) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 pb-2">
           {/* Main nav */}
-          {MAIN_NAV.map((item) => (
-            <NavLink key={item.href} {...item}
-              count={item.href === '/inbox' ? unreadCount : undefined}
-              active={pathname === item.href} onClick={close} />
-          ))}
+          {MAIN_NAV.map((item) => {
+            const countKey = item.label.toLowerCase()
+            const count = countKey === 'inbox' ? unreadCount : categoryCounts[countKey]
+            return (
+              <NavLink key={item.href} {...item}
+                count={count}
+                active={pathname === item.href} onClick={close} />
+            )
+          })}
 
           {/* More toggle */}
           <button
@@ -171,9 +180,15 @@ export default function AppShell({ children, profile }: AppShellProps) {
             <span>{showMore ? 'Less' : 'More'}</span>
           </button>
 
-          {showMore && MORE_NAV.map((item) => (
-            <NavLink key={item.href} {...item} active={pathname === item.href} onClick={close} />
-          ))}
+          {showMore && MORE_NAV.map((item) => {
+            const countKey = item.label.toLowerCase()
+            const count = categoryCounts[countKey]
+            return (
+              <NavLink key={item.href} {...item} 
+                count={count}
+                active={pathname === item.href} onClick={close} />
+            )
+          })}
 
           {/* Labels section */}
           <div className="pt-3">

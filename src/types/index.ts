@@ -45,6 +45,17 @@ export interface Message {
   category: MessageCategory
   action_completed: boolean
   action_data: Record<string, unknown> | null
+  security_score?: number
+  security_flags?: Array<{
+    type: string
+    value: string
+    severity: number
+    original_severity?: number
+    description: string
+    context?: string
+  }>
+  filtered_at?: string
+  filter_version?: string
   created_at: string
   updated_at: string
   // Joined

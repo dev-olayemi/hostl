@@ -132,15 +132,16 @@ export async function sendMessage(formData: FormData) {
     return { error: `Failed to send message: ${msgError.message}` }
   }
 
-  // Link attachments to messages if any
-  if (attachmentIds.length > 0) {
-    const { data: insertedMessages } = await admin
-      .from('messages')
-      .select('id')
-      .eq('thread_id', thread.id)
-      .eq('from_profile_id', senderProfile.id)
+  // Get inserted message IDs
+  const { data: insertedMessages } = await admin
+    .from('messages')
+    .select('id, to_profile_id')
+    .eq('thread_id', thread.id)
+    .eq('from_profile_id', senderProfile.id)
 
-    if (insertedMessages && insertedMessages.length > 0) {
+  if (insertedMessages && insertedMessages.length > 0) {
+    // Link attachments to messages if any
+    if (attachmentIds.length > 0) {
       const messageAttachments = insertedMessages.flatMap((msg) =>
         attachmentIds.map((attachmentId) => ({
           message_id: msg.id,
@@ -149,6 +150,34 @@ export async function sendMessage(formData: FormData) {
       )
 
       await admin.from('message_attachments').insert(messageAttachments)
+    }
+
+    // Apply security filtering to each message
+    for (const msg of insertedMessages) {
+      try {
+        // Get attachment types for filtering
+        const { data: msgAttachments } = await admin
+          .from('message_attachments')
+          .select('attachments(mime_type)')
+          .eq('message_id', msg.id)
+
+        const attachmentTypes = msgAttachments?.map((ma: any) => ma.attachments?.mime_type).filter(Boolean) || []
+
+        // Call filtering API (async, don't wait)
+        fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/filter-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messageId: msg.id,
+            subject,
+            messageBody: body,
+            senderHandle: senderProfile.handle,
+            attachmentTypes,
+          }),
+        }).catch(err => console.error('Filtering error:', err))
+      } catch (err) {
+        console.error('Message filtering setup error:', err)
+      }
     }
   }
 

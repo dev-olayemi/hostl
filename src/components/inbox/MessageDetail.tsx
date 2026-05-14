@@ -341,6 +341,217 @@ export default function MessageDetail({
           {/* Body */}
           <MessageBody body={body} isHtml={isHtml} />
 
+          {/* Security Flags */}
+          {message.security_flags && Array.isArray(message.security_flags) && message.security_flags.length > 0 && (
+            <div className="rounded-lg border overflow-hidden"
+              style={{ 
+                borderColor: message.security_score && message.security_score < 30 
+                  ? 'oklch(0.85 0.05 27)' 
+                  : message.security_score && message.security_score < 60
+                  ? 'oklch(0.85 0.05 60)'
+                  : 'oklch(0.85 0.05 220)',
+                backgroundColor: 'var(--color-surface-raised)'
+              }}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b"
+                style={{ 
+                  borderColor: 'var(--color-border-subtle)',
+                  backgroundColor: message.security_score && message.security_score < 30 
+                    ? 'oklch(0.98 0.02 27)' 
+                    : message.security_score && message.security_score < 60
+                    ? 'oklch(0.98 0.02 60)'
+                    : 'oklch(0.98 0.02 220)'
+                }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ 
+                      backgroundColor: message.security_score && message.security_score < 30 
+                        ? 'oklch(0.95 0.05 27)' 
+                        : message.security_score && message.security_score < 60
+                        ? 'oklch(0.95 0.05 60)'
+                        : 'oklch(0.95 0.05 220)'
+                    }}>
+                    <ShieldOff size={16} 
+                      style={{ 
+                        color: message.security_score && message.security_score < 30 
+                          ? 'var(--color-destructive)' 
+                          : message.security_score && message.security_score < 60
+                          ? 'oklch(0.50 0.15 60)'
+                          : 'oklch(0.50 0.15 220)'
+                      }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
+                      Security Analysis
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                      {message.security_flags.length} {message.security_flags.length === 1 ? 'issue' : 'issues'} detected
+                    </p>
+                  </div>
+                </div>
+                {message.security_score !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
+                      Trust Score
+                    </span>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md"
+                      style={{ 
+                        backgroundColor: message.security_score >= 60 
+                          ? 'oklch(0.95 0.05 145)' 
+                          : message.security_score >= 30 
+                          ? 'oklch(0.95 0.05 60)' 
+                          : 'oklch(0.95 0.05 27)',
+                        border: `1px solid ${
+                          message.security_score >= 60 
+                            ? 'oklch(0.85 0.08 145)' 
+                            : message.security_score >= 30 
+                            ? 'oklch(0.85 0.08 60)' 
+                            : 'oklch(0.85 0.08 27)'
+                        }`
+                      }}>
+                      <span className="text-sm font-bold"
+                        style={{ 
+                          color: message.security_score >= 60 
+                            ? 'oklch(0.40 0.18 145)' 
+                            : message.security_score >= 30 
+                            ? 'oklch(0.45 0.15 60)' 
+                            : 'var(--color-destructive)'
+                        }}>
+                        {message.security_score}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>/100</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Flags List */}
+              <div className="divide-y" style={{ borderColor: 'var(--color-border-subtle)' }}>
+                {message.security_flags.map((flag: any, index: number) => (
+                  <div key={index} className="flex items-start gap-3 px-4 py-3">
+                    {/* Icon */}
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ 
+                        backgroundColor: flag.severity >= 70 
+                          ? 'oklch(0.95 0.05 27)' 
+                          : flag.severity >= 40 
+                          ? 'oklch(0.95 0.05 60)' 
+                          : 'oklch(0.95 0.05 220)',
+                        border: `1px solid ${
+                          flag.severity >= 70 
+                            ? 'oklch(0.85 0.08 27)' 
+                            : flag.severity >= 40 
+                            ? 'oklch(0.85 0.08 60)' 
+                            : 'oklch(0.85 0.08 220)'
+                        }`
+                      }}>
+                      {flag.type === 'keyword' && <FileText size={14} style={{ color: flag.severity >= 70 ? 'var(--color-destructive)' : flag.severity >= 40 ? 'oklch(0.50 0.15 60)' : 'oklch(0.50 0.15 220)' }} />}
+                      {flag.type === 'url' && <ExternalLink size={14} style={{ color: flag.severity >= 70 ? 'var(--color-destructive)' : flag.severity >= 40 ? 'oklch(0.50 0.15 60)' : 'oklch(0.50 0.15 220)' }} />}
+                      {flag.type === 'attachment' && <File size={14} style={{ color: flag.severity >= 70 ? 'var(--color-destructive)' : flag.severity >= 40 ? 'oklch(0.50 0.15 60)' : 'oklch(0.50 0.15 220)' }} />}
+                      {flag.type === 'sender' && <MailOpen size={14} style={{ color: flag.severity >= 70 ? 'var(--color-destructive)' : flag.severity >= 40 ? 'oklch(0.50 0.15 60)' : 'oklch(0.50 0.15 220)' }} />}
+                      {flag.type === 'blocked' && <ShieldOff size={14} style={{ color: 'var(--color-destructive)' }} />}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
+                          {flag.type === 'keyword' && 'Suspicious Content'}
+                          {flag.type === 'url' && 'Suspicious Link'}
+                          {flag.type === 'attachment' && 'Suspicious Attachment'}
+                          {flag.type === 'sender' && 'Sender Pattern'}
+                          {flag.type === 'blocked' && 'Blocked Sender'}
+                        </p>
+                        {flag.severity !== undefined && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide shrink-0"
+                            style={{ 
+                              backgroundColor: flag.severity >= 70 
+                                ? 'oklch(0.95 0.05 27)' 
+                                : flag.severity >= 40 
+                                ? 'oklch(0.95 0.05 60)' 
+                                : 'oklch(0.95 0.05 220)',
+                              color: flag.severity >= 70 
+                                ? 'var(--color-destructive)' 
+                                : flag.severity >= 40 
+                                ? 'oklch(0.50 0.15 60)' 
+                                : 'oklch(0.50 0.15 220)',
+                              border: `1px solid ${
+                                flag.severity >= 70 
+                                  ? 'oklch(0.85 0.08 27)' 
+                                  : flag.severity >= 40 
+                                  ? 'oklch(0.85 0.08 60)' 
+                                  : 'oklch(0.85 0.08 220)'
+                              }`
+                            }}>
+                            {flag.severity >= 70 ? 'High' : flag.severity >= 40 ? 'Medium' : 'Low'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs leading-relaxed mb-1" style={{ color: 'var(--color-muted-foreground)' }}>
+                        {flag.description}
+                      </p>
+                      {flag.value && (
+                        <code className="text-[11px] px-1.5 py-0.5 rounded font-mono"
+                          style={{ 
+                            backgroundColor: 'var(--color-surface)',
+                            color: 'var(--color-foreground)',
+                            border: '1px solid var(--color-border-subtle)'
+                          }}>
+                          {flag.value}
+                        </code>
+                      )}
+                      {flag.context && (
+                        <p className="text-[10px] mt-1.5 flex items-center gap-1"
+                          style={{ color: 'var(--color-muted-foreground)' }}>
+                          <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-muted-foreground)' }} />
+                          {flag.context === 'trusted_sender' && 'Severity reduced: Trusted sender'}
+                          {flag.context === 'existing_conversation' && 'Severity reduced: Existing conversation'}
+                          {flag.context === 'first_contact' && 'Severity increased: First contact'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer Warning */}
+              {(message.category === 'suspicious' || message.category === 'isolated') && (
+                <div className="px-4 py-3 border-t"
+                  style={{ 
+                    borderColor: 'var(--color-border-subtle)',
+                    backgroundColor: message.category === 'isolated' 
+                      ? 'oklch(0.98 0.02 27)' 
+                      : 'oklch(0.98 0.02 60)'
+                  }}>
+                  <div className="flex items-start gap-2.5">
+                    <Flag size={14} className="mt-0.5 shrink-0"
+                      style={{ 
+                        color: message.category === 'isolated' 
+                          ? 'var(--color-destructive)' 
+                          : 'oklch(0.50 0.15 60)'
+                      }} />
+                    <div>
+                      <p className="text-xs font-medium mb-0.5"
+                        style={{ 
+                          color: message.category === 'isolated' 
+                            ? 'var(--color-destructive)' 
+                            : 'oklch(0.45 0.15 60)'
+                        }}>
+                        {message.category === 'isolated' ? 'Message Isolated' : 'Message Flagged'}
+                      </p>
+                      <p className="text-[11px] leading-relaxed"
+                        style={{ color: 'var(--color-muted-foreground)' }}>
+                        {message.category === 'isolated' 
+                          ? 'This message has been quarantined for your protection. Do not interact with any links or attachments.'
+                          : 'This message has been flagged as potentially suspicious. Exercise caution with links and attachments.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="space-y-2">
