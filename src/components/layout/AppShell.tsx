@@ -106,11 +106,15 @@ export default function AppShell({ children, profile }: AppShellProps) {
   return (
     <div className="flex h-screen overflow-hidden w-screen max-w-full" style={{ backgroundColor: 'var(--color-background)' }}>
       <DynamicTitle unreadCount={unreadCount} />
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-20 lg:hidden" style={{ backgroundColor: 'oklch(0 0 0 / 0.4)' }}
-          onClick={close} />
-      )}
+      {/* Mobile overlay — always in DOM, toggled via opacity/pointer-events */}
+      <div
+        className={cn(
+          'fixed inset-0 z-20 lg:hidden transition-opacity duration-200',
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        )}
+        style={{ backgroundColor: 'oklch(0 0 0 / 0.4)' }}
+        onClick={close}
+      />
 
       {/* Sidebar */}
       <aside
