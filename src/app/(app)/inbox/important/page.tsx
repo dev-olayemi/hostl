@@ -29,5 +29,5 @@ export default async function ImportantPage() {
     .eq('is_important', true)
     .order('created_at', { ascending: false })
 
-  return <InboxClient initialMessages={messages ?? []} category="important" />
+  return <InboxClient initialMessages={messages ?? []} category="important" userId={user.id} />
 }

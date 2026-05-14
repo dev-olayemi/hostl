@@ -11,5 +11,5 @@ export default async function ArchivedPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const messages = await getInboxMessages(user.id, 'archived')
-  return <InboxClient initialMessages={messages} category="archived" />
+  return <InboxClient initialMessages={messages} category="archived" userId={user.id} />
 }

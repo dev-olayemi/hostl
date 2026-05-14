@@ -11,5 +11,5 @@ export default async function SuspiciousPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const messages = await getInboxMessages(user.id, 'suspicious')
-  return <InboxClient initialMessages={messages} category="suspicious" />
+  return <InboxClient initialMessages={messages} category="suspicious" userId={user.id} />
 }

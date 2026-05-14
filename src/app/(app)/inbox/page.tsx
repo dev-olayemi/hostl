@@ -28,5 +28,5 @@ export default async function InboxPage() {
     .eq('category', 'inbox')
     .order('created_at', { ascending: false })
 
-  return <InboxClient initialMessages={messages ?? []} category="inbox" />
+  return <InboxClient initialMessages={messages ?? []} category="inbox" userId={user.id} />
 }

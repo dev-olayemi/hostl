@@ -11,5 +11,5 @@ export default async function DraftsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const messages = await getInboxMessages(user.id, 'drafts')
-  return <InboxClient initialMessages={messages} category="drafts" />
+  return <InboxClient initialMessages={messages} category="drafts" userId={user.id} />
 }

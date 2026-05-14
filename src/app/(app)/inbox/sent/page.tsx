@@ -27,5 +27,5 @@ export default async function SentPage() {
     .eq('from_profile_id', user.id)
     .order('created_at', { ascending: false })
 
-  return <InboxClient initialMessages={messages ?? []} category="sent" />
+  return <InboxClient initialMessages={messages ?? []} category="sent" userId={user.id} />
 }

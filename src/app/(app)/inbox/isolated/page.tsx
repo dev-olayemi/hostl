@@ -11,5 +11,5 @@ export default async function IsolatedPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const messages = await getInboxMessages(user.id, 'isolated')
-  return <InboxClient initialMessages={messages} category="isolated" />
+  return <InboxClient initialMessages={messages} category="isolated" userId={user.id} />
 }

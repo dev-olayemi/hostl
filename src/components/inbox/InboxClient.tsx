@@ -1,17 +1,17 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useCallback } from 'react'
 import {
   Search, RefreshCw, PenSquare, Mail, CheckSquare,
   CalendarCheck, UserCircle, Archive, Trash2, MailOpen,
-  Star, X, Check
+  Star, X, Check, ChevronDown, User, Tag, Calendar
 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import MessageRow from './MessageRow'
 import MessageDetail from './MessageDetail'
+import { createClient } from '@/lib/supabase/client'
 import {
   bulkMarkRead, bulkArchive, bulkTrash, bulkMarkImportant,
   markRead as markReadAction,
@@ -31,24 +31,143 @@ const ONBOARDING_TIPS = [
   { icon: UserCircle,    title: 'Complete your profile',    desc: 'Add a photo and bio so people know who you are when they receive your messages.' },
 ]
 
+// Search filter chips — like Gmail
+interface SearchFilters {
+  from: string
+  to: string
+  label: string
+  hasAttachment: boolean
+  dateAfter: string
+  dateBefore: string
+  isUnread: boolean | null
+  isStarred: boolean | null
+}
+
+const DEFAULT_FILTERS: SearchFilters = {
+  from: '', to: '', label: '', hasAttachment: false,
+  dateAfter: '', dateBefore: '', isUnread: null, isStarred: null,
+}
+
 interface Props {
   initialMessages: Message[]
   category: MessageCategory
+  userId: string
 }
 
-export default function InboxClient({ initialMessages, category }: Props) {
-  const router = useRouter()
+export default function InboxClient({ initialMessages, category, userId }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
   const [search, setSearch] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const filtered = messages.filter((m) =>
-    m.subject.toLowerCase().includes(search.toLowerCase()) ||
-    m.from_profile?.display_name?.toLowerCase().includes(search.toLowerCase()) ||
-    m.from_profile?.handle?.toLowerCase().includes(search.toLowerCase())
-  )
+  // ── Real-time subscription ─────────────────────────────────
+  useEffect(() => {
+    if (category !== 'inbox' && category !== 'important') return
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`inbox-${userId}-${category}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `to_profile_id=eq.${userId}`,
+      }, async (payload) => {
+        const newMsg = payload.new as Message
+        if (newMsg.category !== category && category !== 'inbox') return
+
+        // Fetch full message with profiles
+        const { data } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
+            to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system)
+          `)
+          .eq('id', newMsg.id)
+          .single()
+
+        if (data) {
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some((m) => m.id === data.id)) return prev
+            return [data as Message, ...prev]
+          })
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `to_profile_id=eq.${userId}`,
+      }, (payload) => {
+        const updated = payload.new as Message
+        setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, ...updated } : m))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [userId, category])
+
+  // ── Refresh with animation ─────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    const supabase = createClient()
+
+    let query = supabase
+      .from('messages')
+      .select(`
+        *,
+        from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
+        to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (category === 'sent') {
+      query = query.eq('from_profile_id', userId)
+    } else if (category === 'important') {
+      query = query.eq('to_profile_id', userId).eq('is_important', true)
+    } else {
+      query = query.eq('to_profile_id', userId).eq('category', category)
+    }
+
+    const { data } = await query
+    setMessages(((data as unknown) as Message[]) ?? [])
+    // Keep spinner for at least 600ms so user sees it
+    setTimeout(() => setIsRefreshing(false), 600)
+  }, [userId, category])
+
+  // ── Search + filter logic ──────────────────────────────────
+  const filtered = messages.filter((m) => {
+    const q = search.toLowerCase()
+    const matchesText = !q ||
+      m.subject.toLowerCase().includes(q) ||
+      m.from_profile?.display_name?.toLowerCase().includes(q) ||
+      m.from_profile?.handle?.toLowerCase().includes(q) ||
+      m.body.replace(/<[^>]*>/g, '').toLowerCase().includes(q)
+
+    const matchesFrom = !filters.from ||
+      m.from_profile?.handle?.toLowerCase().includes(filters.from.toLowerCase()) ||
+      m.from_profile?.display_name?.toLowerCase().includes(filters.from.toLowerCase())
+
+    const matchesUnread = filters.isUnread === null ||
+      (filters.isUnread ? !m.is_read : m.is_read)
+
+    const matchesStarred = filters.isStarred === null ||
+      (filters.isStarred ? m.is_important : !m.is_important)
+
+    const matchesDate = (!filters.dateAfter || new Date(m.created_at) >= new Date(filters.dateAfter)) &&
+      (!filters.dateBefore || new Date(m.created_at) <= new Date(filters.dateBefore))
+
+    return matchesText && matchesFrom && matchesUnread && matchesStarred && matchesDate
+  })
+
+  const hasActiveFilters = filters.from || filters.isUnread !== null ||
+    filters.isStarred !== null || filters.dateAfter || filters.dateBefore
 
   const unreadCount = messages.filter((m) => !m.is_read).length
   const allSelected = filtered.length > 0 && filtered.every((m) => selected.has(m.id))
@@ -86,9 +205,8 @@ export default function InboxClient({ initialMessages, category }: Props) {
     if (!msg) return
     const next = !msg.is_important
     updateMessages([id], { is_important: next })
-    import('@/lib/supabase/client').then(({ createClient }) => {
-      createClient().from('messages').update({ is_important: next }).eq('id', id)
-    })
+    const supabase = createClient()
+    supabase.from('messages').update({ is_important: next }).eq('id', id)
   }
 
   function bulkAction(fn: (ids: string[]) => Promise<unknown>, patch?: Partial<Message>, remove = false) {
@@ -96,6 +214,12 @@ export default function InboxClient({ initialMessages, category }: Props) {
     if (patch) updateMessages(ids, patch)
     if (remove) removeMessages(ids)
     startTransition(async () => { await fn(ids) })
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_FILTERS)
+    setSearch('')
+    setShowFilters(false)
   }
 
   return (
@@ -148,25 +272,124 @@ export default function InboxClient({ initialMessages, category }: Props) {
                   </span>
                 )}
               </div>
-              <button onClick={() => router.refresh()} className="p-1.5 rounded-md"
-                style={{ color: 'var(--color-muted-foreground)' }} title="Refresh"
+              {/* Refresh with spinner */}
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="p-1.5 rounded-md transition-colors"
+                style={{ color: 'var(--color-muted-foreground)' }}
+                title="Refresh"
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-accent)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
-                <RefreshCw size={14} />
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
               </button>
             </div>
           )}
 
+          {/* Search bar — font-size 16px prevents iOS zoom */}
           <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted-foreground)' }} />
-            <Input placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm" style={{ backgroundColor: 'var(--color-surface)' }} />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: 'var(--color-muted-foreground)' }} />
+            <input
+              type="search"
+              placeholder="Search messages…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setShowFilters(true)}
+              className="w-full rounded-lg border pl-8 pr-8 h-9 transition-colors focus:outline-none focus:ring-2"
+              style={{
+                fontSize: '16px', // prevents iOS zoom on focus
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-foreground)',
+              }}
+            />
+            {(search || hasActiveFilters) && (
+              <button onClick={clearFilters}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                style={{ color: 'var(--color-muted-foreground)' }}>
+                <X size={13} />
+              </button>
+            )}
           </div>
+
+          {/* Filter chips — shown when search is focused or filters active */}
+          {(showFilters || hasActiveFilters) && (
+            <div className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
+              {/* From filter */}
+              <div className="relative shrink-0">
+                <button
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
+                  style={{
+                    borderColor: filters.from ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: filters.from ? 'var(--color-accent)' : 'transparent',
+                    color: filters.from ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                  }}
+                >
+                  <User size={10} />
+                  {filters.from ? `From: ${filters.from}` : 'From'}
+                  <ChevronDown size={10} />
+                </button>
+              </div>
+
+              {/* Unread filter */}
+              <button
+                onClick={() => setFilters((f) => ({ ...f, isUnread: f.isUnread === true ? null : true }))}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium shrink-0 transition-colors"
+                style={{
+                  borderColor: filters.isUnread ? 'var(--color-primary)' : 'var(--color-border)',
+                  backgroundColor: filters.isUnread ? 'var(--color-accent)' : 'transparent',
+                  color: filters.isUnread ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                }}
+              >
+                <Mail size={10} />
+                Unread
+              </button>
+
+              {/* Starred filter */}
+              <button
+                onClick={() => setFilters((f) => ({ ...f, isStarred: f.isStarred === true ? null : true }))}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium shrink-0 transition-colors"
+                style={{
+                  borderColor: filters.isStarred ? 'var(--color-primary)' : 'var(--color-border)',
+                  backgroundColor: filters.isStarred ? 'var(--color-accent)' : 'transparent',
+                  color: filters.isStarred ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                }}
+              >
+                <Star size={10} />
+                Starred
+              </button>
+
+              {/* Date filter */}
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium shrink-0"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted-foreground)' }}>
+                <Calendar size={10} />
+                <input
+                  type="date"
+                  value={filters.dateAfter}
+                  onChange={(e) => setFilters((f) => ({ ...f, dateAfter: e.target.value }))}
+                  className="bg-transparent outline-none w-24"
+                  style={{ fontSize: '16px', color: 'var(--color-foreground)' }}
+                  placeholder="After"
+                />
+              </div>
+
+              {/* Clear all */}
+              {hasActiveFilters && (
+                <button onClick={clearFilters}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
+                  style={{ color: 'var(--color-destructive)' }}>
+                  <X size={10} /> Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
-          {isEmpty && category === 'inbox' ? (
+        <div className="flex-1 overflow-y-auto" onClick={() => setShowFilters(false)}>
+          {isEmpty && category === 'inbox' && !search && !hasActiveFilters ? (
             <div className="px-5 py-8 space-y-6">
               <div className="space-y-1">
                 <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>Your inbox is empty</p>
@@ -196,8 +419,14 @@ export default function InboxClient({ initialMessages, category }: Props) {
           ) : isEmpty ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 py-20">
               <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-                {search ? 'No results found' : 'Nothing here yet'}
+                {search || hasActiveFilters ? 'No results found' : 'Nothing here yet'}
               </p>
+              {(search || hasActiveFilters) && (
+                <button onClick={clearFilters} className="text-xs underline"
+                  style={{ color: 'var(--color-primary)' }}>
+                  Clear search
+                </button>
+              )}
             </div>
           ) : (
             filtered.map((message) => (
@@ -206,7 +435,7 @@ export default function InboxClient({ initialMessages, category }: Props) {
                 message={message}
                 isSelected={selectedMessage?.id === message.id}
                 isChecked={selected.has(message.id)}
-                onSelect={() => { setSelectedMessage(message); markRead(message.id) }}
+                onSelect={() => { setSelectedMessage(message); markRead(message.id); setShowFilters(false) }}
                 onToggleImportant={() => toggleImportant(message.id)}
                 onToggleCheck={() => toggleSelect(message.id)}
               />
