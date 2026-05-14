@@ -257,6 +257,101 @@ export default function ComposeView() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Get current user ID
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id)
+    })
+  }, [])
+
+  // Track unsaved changes
+  useEffect(() => {
+    const hasContent = subject.trim() || richBody.trim() || htmlBody.trim() || 
+                       toRecipients.length > 0 || ccRecipients.length > 0 || 
+                       attachments.length > 0
+    setHasUnsavedChanges(hasContent)
+  }, [subject, richBody, htmlBody, toRecipients, ccRecipients, attachments])
+
+  // Warn before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  // Auto-save draft every 10 seconds
+  useEffect(() => {
+    if (!hasUnsavedChanges || !currentUserId) return
+
+    const saveDraft = async () => {
+      const body = bodyMode === 'html' ? htmlBody : richBody
+      if (!body.trim() && !subject.trim()) return
+
+      const draftData = {
+        to: toRecipients,
+        cc: ccRecipients,
+        subject,
+        body,
+        bodyMode,
+        contentType,
+        attachments,
+        savedAt: new Date().toISOString(),
+      }
+
+      localStorage.setItem(`draft_${currentUserId}`, JSON.stringify(draftData))
+    }
+
+    const interval = setInterval(saveDraft, 10000) // Save every 10 seconds
+    return () => clearInterval(interval)
+  }, [hasUnsavedChanges, currentUserId, toRecipients, ccRecipients, subject, richBody, htmlBody, bodyMode, contentType, attachments])
+
+  // Load draft on mount
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const savedDraft = localStorage.getItem(`draft_${currentUserId}`)
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft)
+        
+        // Ask user if they want to restore draft
+        const restore = window.confirm('You have an unsaved draft. Would you like to restore it?')
+        if (restore) {
+          setToRecipients(draft.to || [])
+          setCcRecipients(draft.cc || [])
+          setSubject(draft.subject || '')
+          setBodyMode(draft.bodyMode || 'rich')
+          setContentType(draft.contentType || 'text')
+          setAttachments(draft.attachments || [])
+          
+          if (draft.bodyMode === 'html') {
+            setHtmlBody(draft.body || '')
+          } else {
+            setRichBody(draft.body || '')
+          }
+          
+          if (draft.cc && draft.cc.length > 0) {
+            setShowCc(true)
+          }
+        } else {
+          // Clear draft if user doesn't want to restore
+          localStorage.removeItem(`draft_${currentUserId}`)
+        }
+      } catch (error) {
+        console.error('Failed to restore draft:', error)
+      }
+    }
+  }, [currentUserId])
 
   // Auto-add reply-to recipient
   useEffect(() => {
@@ -333,6 +428,23 @@ export default function ComposeView() {
     if (toRecipients.length === 0) { setError('Add at least one recipient.'); return }
     if (!subject.trim()) { setError('Subject is required.'); return }
 
+    // Prevent self-messaging (check if user is sending to themselves)
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        const selfRecipient = [...toRecipients, ...ccRecipients].find(r => r.id === user.id)
+        if (selfRecipient) {
+          setError(`You cannot send messages to yourself (@${selfRecipient.handle}).`)
+          return
+        }
+        
+        // Continue with submission
+        submitMessage()
+      }
+    })
+  }
+
+  function submitMessage() {
     const body = bodyMode === 'html' ? htmlBody : richBody
     if (!body.trim() || body === '<p></p>') { setError('Message body is required.'); return }
 
@@ -346,7 +458,15 @@ export default function ComposeView() {
 
     startTransition(async () => {
       const result = await sendMessage(fd)
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+      } else {
+        // Clear draft after successful send
+        if (currentUserId) {
+          localStorage.removeItem(`draft_${currentUserId}`)
+        }
+        setHasUnsavedChanges(false)
+      }
     })
   }
 
@@ -571,9 +691,29 @@ export default function ComposeView() {
                 ? <><Loader2 size={14} className="animate-spin mr-2" />Sending…</>
                 : totalRecipients > 1 ? `Send to ${totalRecipients}` : 'Send'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => router.back()}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                if (hasUnsavedChanges) {
+                  const confirmDiscard = window.confirm('Discard unsaved changes?')
+                  if (confirmDiscard) {
+                    if (currentUserId) {
+                      localStorage.removeItem(`draft_${currentUserId}`)
+                    }
+                    router.back()
+                  }
+                } else {
+                  router.back()
+                }
+              }}>
               Discard
             </Button>
+            {hasUnsavedChanges && (
+              <span className="text-xs ml-auto" style={{ color: 'var(--color-muted-foreground)' }}>
+                Draft auto-saved
+              </span>
+            )}
           </div>
 
         </form>

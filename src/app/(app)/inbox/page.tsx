@@ -17,16 +17,25 @@ export default async function InboxPage() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: messages } = await admin
+  const { data: rawMessages } = await admin
     .from('messages')
     .select(`
       *,
       from_profile:profiles!messages_from_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
-      to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system)
+      to_profile:profiles!messages_to_profile_id_fkey(id, handle, display_name, avatar_url, verified, account_type, is_system),
+      message_attachments(
+        attachments(id, file_name, file_size, mime_type, storage_url)
+      )
     `)
     .eq('to_profile_id', user.id)
     .eq('category', 'inbox')
     .order('created_at', { ascending: false })
 
-  return <InboxClient initialMessages={messages ?? []} category="inbox" userId={user.id} />
+  // Transform nested attachments structure
+  const messages = rawMessages?.map((msg: any) => ({
+    ...msg,
+    attachments: msg.message_attachments?.map((ma: any) => ma.attachments).filter(Boolean) || []
+  })) || []
+
+  return <InboxClient initialMessages={messages} category="inbox" userId={user.id} />
 }
