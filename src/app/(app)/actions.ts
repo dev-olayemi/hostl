@@ -12,7 +12,7 @@ function getAdminClient() {
   )
 }
 
-export async function sendMessage(formData: FormData) {
+export async function sendMessage(formData: FormData, returnPath?: string) {
   // Use regular client to verify the session
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -181,5 +181,6 @@ export async function sendMessage(formData: FormData) {
     }
   }
 
-  redirect('/inbox/sent')
+  // Redirect back to where the user came from, or to sent if no return path
+  redirect(returnPath || '/inbox/sent')
 }

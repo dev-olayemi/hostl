@@ -242,6 +242,7 @@ export default function ComposeView() {
   // Pre-fill from reply/forward URL params
   const prefillTo = searchParams.get('to') ?? ''
   const prefillSubject = searchParams.get('subject') ?? ''
+  const returnPath = searchParams.get('from') ?? '/inbox/sent'
 
   const [toRecipients, setToRecipients] = useState<RecipientProfile[]>([])
   const [ccRecipients, setCcRecipients] = useState<RecipientProfile[]>([])
@@ -457,7 +458,7 @@ export default function ComposeView() {
     fd.set('attachments', JSON.stringify(attachments.map((a) => a.id)))
 
     startTransition(async () => {
-      const result = await sendMessage(fd)
+      const result = await sendMessage(fd, returnPath)
       if (result?.error) {
         setError(result.error)
       } else {

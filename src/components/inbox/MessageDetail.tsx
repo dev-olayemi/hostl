@@ -115,11 +115,13 @@ export default function MessageDetail({
   }
 
   function handleReply() {
-    router.push(`/compose?reply=${message.id}&to=${from_profile?.handle ?? ''}&subject=${encodeURIComponent(`Re: ${subject}`)}`)
+    const currentPath = window.location.pathname
+    router.push(`/compose?reply=${message.id}&to=${from_profile?.handle ?? ''}&subject=${encodeURIComponent(`Re: ${subject}`)}&from=${encodeURIComponent(currentPath)}`)
   }
 
   function handleForward() {
-    router.push(`/compose?forward=${message.id}&subject=${encodeURIComponent(`Fwd: ${subject}`)}`)
+    const currentPath = window.location.pathname
+    router.push(`/compose?forward=${message.id}&subject=${encodeURIComponent(`Fwd: ${subject}`)}&from=${encodeURIComponent(currentPath)}`)
   }
 
   function handlePrint() { window.print() }

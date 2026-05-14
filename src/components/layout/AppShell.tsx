@@ -142,7 +142,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
 
         {/* Compose */}
         <div className="px-4 pb-3 shrink-0 space-y-1.5">
-          <Link href="/compose">
+          <Link href={`/compose?from=${encodeURIComponent(pathname)}`}>
             <Button className="w-full gap-2 font-medium"
               style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}>
               <PenSquare size={15} /> Compose
