@@ -79,7 +79,13 @@ export default function SignupForm() {
     startTransition(async () => {
       const result = await signUp(fd)
       if (result?.error) setError(result.error)
-      else if (result?.redirect) window.location.href = result.redirect
+      else if (result?.redirect) {
+        // Clear auth events flag so welcome message fires on first inbox load
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('hostl_auth_events_fired')
+        }
+        window.location.href = result.redirect
+      }
     })
   }
 

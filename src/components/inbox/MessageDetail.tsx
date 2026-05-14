@@ -194,7 +194,7 @@ export default function MessageDetail({
 
       {/* ── Message content ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 py-6 space-y-5">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
 
           {/* Subject + type badge */}
           <div className="flex items-start gap-3 flex-wrap">
@@ -259,18 +259,18 @@ export default function MessageDetail({
                 <div className="mt-3 rounded-xl p-4 text-xs space-y-2"
                   style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)' }}>
                   {[
-                    { label: 'from',    value: `${from_profile?.display_name} <@${from_profile?.handle}>` },
-                    { label: 'to',      value: `${to_profile?.display_name ?? ''} <@${to_profile?.handle ?? '—'}>` },
-                    { label: 'date',    value: fullDate },
-                    { label: 'subject', value: subject },
-                    { label: 'type',    value: config.label ?? 'Message' },
-                    { label: 'account', value: isSystemProfile(from_profile) ? 'System' : (from_profile?.account_type ?? 'personal') },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex gap-3">
-                      <span className="w-16 shrink-0 text-right font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
-                        {label}:
+                    { label: 'From',    value: `${from_profile?.display_name ?? ''} @${from_profile?.handle ?? ''}` },
+                    { label: 'To',      value: `${to_profile?.display_name ?? ''} @${to_profile?.handle ?? ''}` },
+                    { label: 'Date',    value: fullDate },
+                    { label: 'Subject', value: subject },
+                    { label: 'Type',    value: config.label ?? 'Message' },
+                    { label: 'Account', value: isSystemProfile(from_profile) ? 'System' : (from_profile?.account_type ?? 'personal') },
+                  ].filter(({ value }) => value.trim()).map(({ label, value }) => (
+                    <div key={label} className="flex gap-2 flex-wrap">
+                      <span className="shrink-0 font-medium w-14 text-right" style={{ color: 'var(--color-muted-foreground)' }}>
+                        {label}
                       </span>
-                      <span style={{ color: 'var(--color-foreground)' }}>{value}</span>
+                      <span className="flex-1 min-w-0 break-words" style={{ color: 'var(--color-foreground)' }}>{value}</span>
                     </div>
                   ))}
                 </div>
