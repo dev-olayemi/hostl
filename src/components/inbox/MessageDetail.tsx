@@ -324,7 +324,7 @@ export default function MessageDetail({
                       <span className="shrink-0 font-medium w-14 text-right" style={{ color: 'var(--color-muted-foreground)' }}>
                         {label}
                       </span>
-                      <span className="flex-1 min-w-0 break-words" style={{ color: 'var(--color-foreground)' }}>{value}</span>
+                      <span className="flex-1 min-w-0 wrap-break-word" style={{ color: 'var(--color-foreground)' }}>{value}</span>
                     </div>
                   ))}
                 </div>

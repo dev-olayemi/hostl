@@ -270,9 +270,9 @@ export default function ComposeView() {
 
   // Track unsaved changes
   useEffect(() => {
-    const hasContent = subject.trim() || richBody.trim() || htmlBody.trim() || 
+    const hasContent = !!(subject.trim() || richBody.trim() || htmlBody.trim() || 
                        toRecipients.length > 0 || ccRecipients.length > 0 || 
-                       attachments.length > 0
+                       attachments.length > 0)
     setHasUnsavedChanges(hasContent)
   }, [subject, richBody, htmlBody, toRecipients, ccRecipients, attachments])
 
