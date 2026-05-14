@@ -422,7 +422,7 @@ export default function ComposeView() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -430,19 +430,16 @@ export default function ComposeView() {
     if (!subject.trim()) { setError('Subject is required.'); return }
 
     // Prevent self-messaging (check if user is sending to themselves)
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        const selfRecipient = [...toRecipients, ...ccRecipients].find(r => r.id === user.id)
-        if (selfRecipient) {
-          setError(`You cannot send messages to yourself (@${selfRecipient.handle}).`)
-          return
-        }
-        
-        // Continue with submission
-        submitMessage()
+    if (currentUserId) {
+      const selfRecipient = [...toRecipients, ...ccRecipients].find(r => r.id === currentUserId)
+      if (selfRecipient) {
+        setError(`You cannot send messages to yourself (@${selfRecipient.handle}).`)
+        return
       }
-    })
+    }
+    
+    // Continue with submission
+    submitMessage()
   }
 
   function submitMessage() {
@@ -456,9 +453,10 @@ export default function ComposeView() {
     fd.set('body', body)
     fd.set('content_type', contentType)
     fd.set('attachments', JSON.stringify(attachments.map((a) => a.id)))
+    fd.set('returnPath', returnPath)
 
     startTransition(async () => {
-      const result = await sendMessage(fd, returnPath)
+      const result = await sendMessage(fd)
       if (result?.error) {
         setError(result.error)
       } else {

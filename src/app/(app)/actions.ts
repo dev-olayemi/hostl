@@ -12,7 +12,7 @@ function getAdminClient() {
   )
 }
 
-export async function sendMessage(formData: FormData, returnPath?: string) {
+export async function sendMessage(formData: FormData) {
   // Use regular client to verify the session
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -39,6 +39,7 @@ export async function sendMessage(formData: FormData, returnPath?: string) {
   const toHandlesRaw = (formData.get('to') as string ?? '')
   const ccHandlesRaw = (formData.get('cc') as string ?? '')
   const attachmentsJson = (formData.get('attachments') as string ?? '[]')
+  const returnPath = (formData.get('returnPath') as string) || '/inbox/sent'
   
   let attachmentIds: string[] = []
   try {
@@ -182,5 +183,5 @@ export async function sendMessage(formData: FormData, returnPath?: string) {
   }
 
   // Redirect back to where the user came from, or to sent if no return path
-  redirect(returnPath || '/inbox/sent')
+  redirect(returnPath)
 }
