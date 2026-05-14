@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Star, Archive, Trash2, Reply, Forward,
   CheckSquare, CalendarCheck, ClipboardList, FileText,
   Check, X, MoreHorizontal, ChevronDown, ChevronUp,
   MailOpen, FolderInput, BellOff, Flag, ShieldOff,
-  Printer, ExternalLink, Clock, Loader2,
+  Printer, ExternalLink, Clock, Loader2, File, Download,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -49,6 +49,21 @@ export default function MessageDetail({
   const [showReportMenu, setShowReportMenu] = useState(false)
   const [localImportant, setLocalImportant] = useState(message.is_important)
   const [isPending, startTransition] = useTransition()
+  const [submittingResponse, setSubmittingResponse] = useState(false)
+
+  // Check if already responded
+  useEffect(() => {
+    if (message.action_completed && message.action_data) {
+      const data = message.action_data as { type?: string; value?: string }
+      if (data.type === 'approval') {
+        setActionState(data.value === 'approved' ? 'approved' : 'declined')
+      } else if (data.type === 'rsvp') {
+        setActionState(data.value === 'yes' ? 'approved' : 'declined')
+      } else {
+        setActionState('submitted')
+      }
+    }
+  }, [message.action_completed, message.action_data])
 
   const { from_profile, to_profile, subject, body, content_type, created_at } = message
   const config = CONTENT_TYPE_CONFIG[content_type]
@@ -108,6 +123,45 @@ export default function MessageDetail({
   }
 
   function handlePrint() { window.print() }
+
+  async function submitResponse(responseType: string, responseValue: string) {
+    setSubmittingResponse(true)
+    try {
+      const response = await fetch('/api/message-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId: message.id,
+          response: responseValue,
+          responseType,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit response')
+      }
+
+      // Update local state
+      if (responseType === 'approval') {
+        setActionState(responseValue === 'approved' ? 'approved' : 'declined')
+      } else if (responseType === 'rsvp') {
+        setActionState(responseValue === 'yes' ? 'approved' : 'declined')
+      } else {
+        setActionState('submitted')
+      }
+    } catch (error) {
+      console.error('Response submission error:', error)
+      alert('Failed to submit response. Please try again.')
+    } finally {
+      setSubmittingResponse(false)
+    }
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
 
   // ── Toolbar button ─────────────────────────────────────────
   const ToolbarBtn = ({ onClick, title, active, children }: {
@@ -287,6 +341,43 @@ export default function MessageDetail({
           {/* Body */}
           <MessageBody body={body} isHtml={isHtml} />
 
+          {/* Attachments */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
+                {message.attachments.length} {message.attachments.length === 1 ? 'Attachment' : 'Attachments'}
+              </p>
+              <div className="space-y-2">
+                {message.attachments.map((attachment) => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.storage_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-accent)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface)')}
+                  >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: 'var(--color-accent)' }}>
+                      <File size={16} style={{ color: 'var(--color-primary)' }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-foreground)' }}>
+                        {attachment.file_name}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                        {formatFileSize(attachment.file_size)}
+                      </p>
+                    </div>
+                    <Download size={16} style={{ color: 'var(--color-muted-foreground)' }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Interactive action area */}
           {content_type !== 'text' && (
             <div className="rounded-xl p-5 space-y-4 border"
@@ -297,13 +388,20 @@ export default function MessageDetail({
                     <div className="space-y-3">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>Your response</p>
                       <div className="flex gap-3">
-                        <Button onClick={() => setActionState('approved')} className="flex-1 gap-2"
+                        <Button 
+                          onClick={() => submitResponse('approval', 'approved')} 
+                          disabled={submittingResponse}
+                          className="flex-1 gap-2"
                           style={{ backgroundColor: 'oklch(0.55 0.18 145)', color: 'white' }}>
-                          <Check size={15} /> Approve
+                          <Check size={15} /> {submittingResponse ? 'Submitting...' : 'Approve'}
                         </Button>
-                        <Button onClick={() => setActionState('declined')} variant="outline" className="flex-1 gap-2"
+                        <Button 
+                          onClick={() => submitResponse('approval', 'declined')} 
+                          disabled={submittingResponse}
+                          variant="outline" 
+                          className="flex-1 gap-2"
                           style={{ color: 'var(--color-destructive)', borderColor: 'var(--color-destructive)' }}>
-                          <X size={15} /> Decline
+                          <X size={15} /> {submittingResponse ? 'Submitting...' : 'Decline'}
                         </Button>
                       </div>
                     </div>
@@ -312,12 +410,19 @@ export default function MessageDetail({
                     <div className="space-y-3">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>Will you attend?</p>
                       <div className="flex gap-3">
-                        <Button onClick={() => setActionState('approved')} className="flex-1"
+                        <Button 
+                          onClick={() => submitResponse('rsvp', 'yes')} 
+                          disabled={submittingResponse}
+                          className="flex-1"
                           style={{ backgroundColor: 'oklch(0.55 0.18 145)', color: 'white' }}>
-                          Yes, I'll be there
+                          {submittingResponse ? 'Submitting...' : "Yes, I'll be there"}
                         </Button>
-                        <Button onClick={() => setActionState('declined')} variant="outline" className="flex-1">
-                          Can't make it
+                        <Button 
+                          onClick={() => submitResponse('rsvp', 'no')} 
+                          disabled={submittingResponse}
+                          variant="outline" 
+                          className="flex-1">
+                          {submittingResponse ? 'Submitting...' : "Can't make it"}
                         </Button>
                       </div>
                     </div>
@@ -325,9 +430,12 @@ export default function MessageDetail({
                   {(content_type === 'survey' || content_type === 'html_form') && (
                     <div className="space-y-3">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>Complete this form</p>
-                      <Button onClick={() => setActionState('submitted')} className="w-full"
+                      <Button 
+                        onClick={() => submitResponse('survey', 'completed')} 
+                        disabled={submittingResponse}
+                        className="w-full"
                         style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}>
-                        Submit response
+                        {submittingResponse ? 'Submitting...' : 'Submit response'}
                       </Button>
                     </div>
                   )}

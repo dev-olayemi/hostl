@@ -4,7 +4,7 @@ import { useState, useTransition, useRef, KeyboardEvent, useEffect } from 'react
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AtSign, X, Loader2, Plus, FileText, CheckSquare,
-  CalendarCheck, ClipboardList, Eye, Code2
+  CalendarCheck, ClipboardList, Eye, Code2, Paperclip, File, Download
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { sendMessage } from '@/app/(app)/actions'
 import RichEditor from './RichEditor'
-import type { MessageContentType } from '@/types'
+import type { MessageContentType, Attachment } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────
 interface RecipientProfile {
@@ -64,49 +64,75 @@ function RecipientInput({
   maxRecipients?: number
 }) {
   const [input, setInput] = useState('')
-  const [suggestion, setSuggestion] = useState<RecipientProfile | null>(null)
+  const [suggestions, setSuggestions] = useState<RecipientProfile[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'found' | 'notfound'>('idle')
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const val = input.replace('@', '').trim().toLowerCase()
-    if (!val) { setSuggestion(null); setStatus('idle'); return }
+    if (!val || val.length < 2) { 
+      setSuggestions([])
+      setStatus('idle')
+      return 
+    }
 
     setStatus('loading')
     debounceRef.current = setTimeout(async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, handle, display_name, avatar_url')
-        .eq('handle', val)
-        .maybeSingle()
+      try {
+        const response = await fetch(`/api/search-users?q=${encodeURIComponent(val)}`)
+        const data = await response.json()
 
-      if (data) { setSuggestion(data); setStatus('found') }
-      else { setSuggestion(null); setStatus('notfound') }
-    }, 400)
+        if (data.results && data.results.length > 0) {
+          setSuggestions(data.results)
+          setStatus('found')
+          setSelectedIndex(0)
+        } else {
+          setSuggestions([])
+          setStatus('notfound')
+        }
+      } catch (error) {
+        console.error('Search error:', error)
+        setSuggestions([])
+        setStatus('notfound')
+      }
+    }, 300)
   }, [input])
 
-  function commit() {
-    if (suggestion && !recipients.find((r) => r.id === suggestion.id)) {
+  function commit(profile?: RecipientProfile) {
+    const profileToAdd = profile || suggestions[selectedIndex]
+    if (profileToAdd && !recipients.find((r) => r.id === profileToAdd.id)) {
       if (recipients.length < maxRecipients) {
-        onAdd(suggestion)
+        onAdd(profileToAdd)
         setInput('')
-        setSuggestion(null)
+        setSuggestions([])
         setStatus('idle')
+        setSelectedIndex(0)
       }
     }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit() }
+    if (e.key === 'Enter' || e.key === ',') { 
+      e.preventDefault()
+      if (suggestions.length > 0) {
+        commit()
+      }
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedIndex((prev) => Math.min(prev + 1, suggestions.length - 1))
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedIndex((prev) => Math.max(prev - 1, 0))
+    }
     if (e.key === 'Backspace' && !input && recipients.length > 0) {
       onRemove(recipients[recipients.length - 1].id)
     }
   }
-
-  const alreadyAdded = suggestion ? recipients.some((r) => r.id === suggestion.id) : false
 
   return (
     <div className="space-y-1.5">
@@ -142,37 +168,58 @@ function RecipientInput({
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-raised)' }}>
           {status === 'loading' && (
             <div className="flex items-center gap-2 px-3 py-2.5 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-              <Loader2 size={12} className="animate-spin" /> Looking up @{input.replace('@', '')}…
+              <Loader2 size={12} className="animate-spin" /> Searching for @{input.replace('@', '')}…
             </div>
           )}
-          {status === 'found' && suggestion && (
-            <button
-              type="button"
-              onClick={commit}
-              disabled={alreadyAdded}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
-              style={{ opacity: alreadyAdded ? 0.5 : 1 }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-accent)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <Avatar className="w-7 h-7 shrink-0">
-                {suggestion.avatar_url
-                  ? <img src={suggestion.avatar_url} alt={suggestion.display_name} className="w-7 h-7 rounded-full object-cover" />
-                  : <AvatarFallback className="text-xs" style={{ backgroundColor: 'var(--color-hostl-100)', color: 'var(--color-hostl-700)' }}>
-                      {suggestion.display_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
-                    </AvatarFallback>
-                }
-              </Avatar>
-              <div>
-                <div className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>{suggestion.display_name}</div>
-                <div className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>@{suggestion.handle}</div>
-              </div>
-              {alreadyAdded && <span className="ml-auto text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Already added</span>}
-            </button>
+          {status === 'found' && suggestions.length > 0 && (
+            <div className="max-h-64 overflow-y-auto">
+              {suggestions.map((suggestion, index) => {
+                const alreadyAdded = recipients.some((r) => r.id === suggestion.id)
+                const isSelected = index === selectedIndex
+                return (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    onClick={() => commit(suggestion)}
+                    disabled={alreadyAdded}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
+                    style={{ 
+                      opacity: alreadyAdded ? 0.5 : 1,
+                      backgroundColor: isSelected ? 'var(--color-accent)' : 'transparent'
+                    }}
+                    onMouseEnter={(e) => {
+                      setSelectedIndex(index)
+                      if (!alreadyAdded) e.currentTarget.style.backgroundColor = 'var(--color-accent)'
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'
+                    }}
+                  >
+                    <Avatar className="w-7 h-7 shrink-0">
+                      {suggestion.avatar_url
+                        ? <img src={suggestion.avatar_url} alt={suggestion.display_name} className="w-7 h-7 rounded-full object-cover" />
+                        : <AvatarFallback className="text-xs" style={{ backgroundColor: 'var(--color-hostl-100)', color: 'var(--color-hostl-700)' }}>
+                            {suggestion.display_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </AvatarFallback>
+                      }
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate" style={{ color: 'var(--color-foreground)' }}>
+                        {suggestion.display_name}
+                      </div>
+                      <div className="text-xs truncate" style={{ color: 'var(--color-muted-foreground)' }}>
+                        @{suggestion.handle}
+                      </div>
+                    </div>
+                    {alreadyAdded && <span className="ml-auto text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Already added</span>}
+                  </button>
+                )
+              })}
+            </div>
           )}
           {status === 'notfound' && (
             <div className="px-3 py-2.5 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-              No account found for @{input.replace('@', '')}
+              No accounts found for "{input.replace('@', '')}"
             </div>
           )}
         </div>
@@ -205,8 +252,11 @@ export default function ComposeView() {
   const [richBody, setRichBody] = useState('')
   const [htmlBody, setHtmlBody] = useState('')
   const [showHtmlPreview, setShowHtmlPreview] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Auto-add reply-to recipient
   useEffect(() => {
@@ -224,6 +274,58 @@ export default function ComposeView() {
 
   const totalRecipients = toRecipients.length + ccRecipients.length
 
+  // ── Handle file upload ────────────────────────────────────────
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (25MB max)
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File too large. Maximum size is 25MB.')
+      return
+    }
+
+    setUploadingFile(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload-attachment', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed')
+      }
+
+      setAttachments((prev) => [...prev, result.attachment])
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload file')
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -240,6 +342,7 @@ export default function ComposeView() {
     fd.set('subject', subject)
     fd.set('body', body)
     fd.set('content_type', contentType)
+    fd.set('attachments', JSON.stringify(attachments.map((a) => a.id)))
 
     startTransition(async () => {
       const result = await sendMessage(fd)
@@ -384,6 +487,69 @@ export default function ComposeView() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Attachments */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Attachments</Label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingFile || attachments.length >= 5}
+                className="flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                <Paperclip size={12} />
+                {uploadingFile ? 'Uploading...' : 'Add file'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.zip"
+              />
+            </div>
+
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                {attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+                  >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: 'var(--color-accent)' }}>
+                      <File size={16} style={{ color: 'var(--color-primary)' }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-foreground)' }}>
+                        {attachment.file_name}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                        {formatFileSize(attachment.file_size)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="p-1.5 rounded-md hover:bg-red-50"
+                      style={{ color: 'var(--color-muted-foreground)' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {attachments.length >= 5 && (
+              <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                Maximum 5 attachments per message
+              </p>
             )}
           </div>
 

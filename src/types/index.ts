@@ -21,6 +21,17 @@ export type MessageCategory = 'inbox' | 'important' | 'sent' | 'drafts' | 'archi
 
 export type MessageContentType = 'text' | 'html_form' | 'approval' | 'rsvp' | 'survey'
 
+export interface Attachment {
+  id: string
+  file_hash: string
+  file_name: string
+  file_size: number
+  mime_type: string
+  storage_url: string
+  uploaded_by: string
+  created_at: string
+}
+
 export interface Message {
   id: string
   thread_id: string
@@ -39,6 +50,7 @@ export interface Message {
   // Joined
   from_profile?: HostlProfile
   to_profile?: HostlProfile
+  attachments?: Attachment[]
 }
 
 export interface Label {

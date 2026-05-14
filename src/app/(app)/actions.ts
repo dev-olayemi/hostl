@@ -38,6 +38,14 @@ export async function sendMessage(formData: FormData) {
   const contentType = (formData.get('content_type') as string) || 'text'
   const toHandlesRaw = (formData.get('to') as string ?? '')
   const ccHandlesRaw = (formData.get('cc') as string ?? '')
+  const attachmentsJson = (formData.get('attachments') as string ?? '[]')
+  
+  let attachmentIds: string[] = []
+  try {
+    attachmentIds = JSON.parse(attachmentsJson)
+  } catch {
+    // Invalid JSON, ignore attachments
+  }
 
   if (!subject || !body) return { error: 'Subject and message are required.' }
 
@@ -122,6 +130,26 @@ export async function sendMessage(formData: FormData) {
   const { error: msgError } = await admin.from('messages').insert(messages)
   if (msgError) {
     return { error: `Failed to send message: ${msgError.message}` }
+  }
+
+  // Link attachments to messages if any
+  if (attachmentIds.length > 0) {
+    const { data: insertedMessages } = await admin
+      .from('messages')
+      .select('id')
+      .eq('thread_id', thread.id)
+      .eq('from_profile_id', senderProfile.id)
+
+    if (insertedMessages && insertedMessages.length > 0) {
+      const messageAttachments = insertedMessages.flatMap((msg) =>
+        attachmentIds.map((attachmentId) => ({
+          message_id: msg.id,
+          attachment_id: attachmentId,
+        }))
+      )
+
+      await admin.from('message_attachments').insert(messageAttachments)
+    }
   }
 
   redirect('/inbox/sent')
